@@ -1,0 +1,252 @@
+ .form-actions {
+   display: flex;
+   gap: 1rem;
+   justify-content: flex-end;
+ }
+/* Make action buttons (Cancel/Save) the same width for visual consistency */
+.form-actions .remove-btn,
+.form-actions .save-btn {
+  /* fixed width so both buttons align visually */
+  width: 110px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+}
+.create-template {
+  padding: 1rem;
+}
+
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.field-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.field-row input {
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+}
+
+/* Make the Customer Name input visually larger (about twice the height/size) */
+.customer-input {
+  padding: 1rem; /* larger padding -> taller */
+  font-size: 1.05rem; /* slightly larger text */
+  min-width: 640px; /* wider by default */
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.field-row .field-select {
+  padding: 0.5rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  background: #fff;
+  font-size: 0.95rem;
+}
+
+.items-area {
+  background: #fff;
+  border-radius: 10px;
+  padding: 12px;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.03);
+}
+
+.items-area h3 { margin: 0 0 0.5rem 0; font-size: 1.05rem }
+
+.items-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+/* Column width tweaks: make Qty narrower and Amount wider */
+.items-table th:nth-child(4), .items-table td:nth-child(4) {
+  width: 70px;
+  max-width: 70px;
+}
+.items-table th:nth-child(5), .items-table td:nth-child(5) {
+  width: 220px;
+  max-width: 220px;
+}
+  gap: 1rem;
+  margin-bottom: 0.75rem;
+}
+.items-header h3 { margin: 0; color: #0f172a }
+.header-add { padding: 0.45rem 0.75rem; border-radius: 8px; font-weight: 700 }
+
+/* Generic autocomplete wrapper for non-table inputs */
+.ac-wrap { position: relative }
+.ac-wrap .ac-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(16,24,40,0.08);
+  box-shadow: 0 8px 20px rgba(2,6,23,0.15);
+  border-radius: 8px;
+  padding: 6px 0;
+  z-index: 9999;
+  list-style: none;
+}
+.ac-wrap .ac-list li { padding: 8px 12px; cursor: pointer }
+.ac-wrap .ac-list li.active, .ac-wrap .ac-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
+
+.customer-id { font-size: 0.85rem; color: #334155; background: #f1f5f9; padding: 4px 8px; border-radius: 6px }
+
+.items-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 10px;
+  /* allow dropdowns to overflow and overlay rows instead of expanding the row height */
+  overflow: visible;
+}
+
+/* Make the last (actions) column a fixed width so subtotal can align under the Amount column */
+.items-table th:last-child,
+.items-table td:last-child {
+  width: 140px;
+  max-width: 140px;
+}
+
+.items-table thead th {
+  text-align: left;
+  padding: 0.6rem 0.8rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: #334155;
+}
+
+.items-table tbody tr {
+  background: #fbfdff;
+  border-radius: 8px;
+}
+
+.items-table td {
+  padding: 0.5rem 0.8rem;
+  vertical-align: middle;
+  border: 0; /* spacing handled by border-spacing */
+}
+
+.items-table input { width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid #edf2f7; background: #fff }
+
+.items-table tr:hover { box-shadow: 0 6px 14px rgba(2,6,23,0.04); transform: translateY(-1px); }
+
+/* Autocomplete dropdown that flows over other UI elements */
+.billing-cell { position: relative }
+.billing-cell .ac-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  max-height: 260px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(16,24,40,0.08);
+  box-shadow: 0 10px 26px rgba(2,6,23,0.12);
+  border-radius: 10px;
+  padding: 8px 0;
+  z-index: 9999; /* ensures it flows above other UI */
+  list-style: none;
+}
+.billing-cell .ac-list li {
+  padding: 10px 14px;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #0f172a;
+}
+
+.billing-cell .ac-list li:hover,
+.billing-cell .ac-list li.active {
+  background: linear-gradient(90deg, #eef2ff, #f8fbff);
+  color: #0b3d91;
+}
+
+.ac-code { font-weight: 600 }
+.ac-desc { font-size: 0.85rem; color: #475569 }
+.add-btn, .remove-btn, .save-btn {
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.add-btn { background: linear-gradient(90deg,#06b6d4,#3b82f6); color: white }
+.remove-btn { background: linear-gradient(90deg,#ef4444,#fb7185); color: white; padding: 0.35rem 0.6rem; border-radius: 6px }
+.remove-btn.small { padding: 0.25rem 0.45rem; border-radius: 6px; font-weight: 600 }
+.save-btn { background: linear-gradient(90deg,#10b981,#059669); color: white; font-weight: 800 }
+
+/* visually indicate disabled remove button (when only one row remains) */
+.remove-btn[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  filter: grayscale(20%);
+}
+
+
+.items-actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem }
+
+.subtotal { margin-left: auto; font-weight: 800; font-size: 1rem }
+
+/* Responsive: allow horizontal scroll on small screens */
+@media (max-width: 720px) {
+  .items-table { display: block; overflow: auto; white-space: nowrap }
+  .items-table thead, .items-table tbody, .items-table tr { display: inline-block; vertical-align: top }
+  .items-table thead { margin-right: 12px }
+}
+/* Responsive: allow Qty/Amount to size down on small screens */
+@media (max-width: 720px) {
+  .items-table th:nth-child(4), .items-table td:nth-child(4),
+  .items-table th:nth-child(5), .items-table td:nth-child(5) {
+    width: auto;
+    max-width: none;
+  }
+}
+
+.right { text-align: right }
+
+.save-error {
+  margin-top: 0.75rem;
+  padding: 0.65rem 0.8rem;
+  border-radius: 8px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  font-weight: 600;
+}
+
+/* bottom row that contains subtotal on the left and action buttons on the right */
+.items-area .bottom-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+/* center the invoice action buttons when used in the items area */
+.items-area .form-actions.invoice-actions-centered {
+  justify-content: center;
+  margin-top: 0.75rem;
+}
+
+/* right-align subtotal row so it appears under the Amount column */
+.items-area .subtotal-row {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.5rem;
+  /* account for the actions column width so subtotal lines up under the Amount column */
+  padding-right: 140px;
+}

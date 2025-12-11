@@ -1,0 +1,158 @@
+.list-templates {
+  background: transparent;
+}
+
+.list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.header-actions { margin-right: 1rem; }
+
+.list-header h2 {
+  margin: 0 0 0.25rem 0;
+}
+
+.muted {
+  color: #718096;
+  margin: 0 0 0.75rem 0;
+}
+
+.search-wrap {
+  min-width: 220px;
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+/* autocomplete styles for Ref # input */
+.ref-wrap { position: relative; display: inline-block }
+.ref-input { padding: 0.45rem 0.6rem; border-radius: 8px; border: 1px solid #e6edf3; min-width: 120px }
+.ref-search-btn { padding: 0.45rem 0.7rem; border-radius: 8px; background: linear-gradient(90deg,#64748b,#475569); color:#fff; border:none; cursor:pointer }
+.ref-wrap .ac-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 240px;
+  max-width: calc(100vw - 48px);
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(16,24,40,0.08);
+  box-shadow: 0 8px 20px rgba(2,6,23,0.15);
+  border-radius: 8px;
+  padding: 6px 0;
+  z-index: 9999;
+  list-style: none;
+}
+.ref-wrap .ac-list li { padding: 8px 12px; cursor: pointer }
+.ref-wrap .ac-list li.active, .ref-wrap .ac-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
+
+.search-input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  outline: none;
+}
+
+.search-input:focus {
+  box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.06);
+  border-color: #60a5fa;
+}
+
+.search-btn {
+  padding: 0.5rem 0.8rem;
+  background: linear-gradient(90deg, #2563eb, #4f46e5);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.search-btn:active {
+  transform: translateY(1px);
+}
+
+.templates-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.04);
+}
+
+.templates-table th,
+.templates-table td {
+  padding: 0.65rem 0.85rem;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+}
+
+.templates-table thead th {
+  background: #fbfdff;
+  font-weight: 700;
+}
+
+.templates-table .right {
+  text-align: right;
+}
+
+.action-btns {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.edit-btn,
+.delete-btn {
+  padding: 0.35rem 0.6rem;
+  border-radius: 6px;
+  border: none;
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.edit-btn svg,
+.delete-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.edit-btn {
+  background: linear-gradient(90deg, #06b6d4, #3b82f6);
+  color: white;
+}
+
+.delete-btn {
+  background: linear-gradient(90deg, #ef4444, #fb7185);
+  color: white;
+}
+
+.btn-label {
+  font-size: 0.85rem;
+}
+
+.create-btn {
+  padding: 0.5rem 0.9rem;
+  border-radius: 8px;
+  background: linear-gradient(90deg,#10b981,#059669);
+  color: white;
+  border: none;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.create-btn:active { transform: translateY(1px); }
+
+.title-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}

@@ -1,0 +1,163 @@
+.create-invoice-root {
+  padding: 1rem;
+}
+
+.create-invoice-root h2 {
+  margin: 0 0 0.5rem 0;
+}
+
+.create-invoice-root p { color: #475569 }
+
+/* BL selector styles (separate dropdown) */
+.bl-wrap { display: inline-block }
+.bl-btn {
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  background: #fff;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.ac-bl-list {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  width: 260px;
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(16,24,40,0.08);
+  box-shadow: 0 8px 20px rgba(2,6,23,0.12);
+  border-radius: 8px;
+  padding: 6px 0;
+  z-index: 9999;
+  list-style: none;
+}
+.ac-bl-list li { padding: 8px 12px; cursor: pointer }
+.ac-bl-list li.active, .ac-bl-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
+
+/* Read-only invoice header row */
+.invoice-readonly-row {
+  display: flex;
+  gap: 0.75rem;
+  margin-top: 0.6rem;
+  flex-wrap: wrap;
+}
+.invoice-readonly-row .field { display: flex; flex-direction: column; min-width: 160px }
+.invoice-readonly-row label { font-size: 0.8rem; color: #475569; margin-bottom: 0.25rem }
+.readonly-input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  background: #f8fafc;
+  color: #0f172a;
+}
+.readonly-input:focus { outline: none; box-shadow: none }
+
+/* Invoice header box */
+.invoice-header-box {
+  border: 1px solid #e6edf3;
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.03);
+}
+
+.invoice-header-box .create-ref-form {
+  display: flex;
+  gap: 0.5rem; /* reduced spacing between controls */
+  align-items: center;
+}
+
+/* ensure inner ref area aligns controls with a little space */
+.invoice-header-box .create-ref-form .ref-wrap {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+.invoice-header-box .create-ref-form .ref-input {
+  min-width: 200px;
+}
+
+.invoice-header-box .invoice-readonly-row { margin-top: 12px }
+
+/* Visual separation between header box and line items */
+.invoice-header-box { margin-bottom: 18px }
+.items-area { margin-top: 8px; padding-top: 12px; border-top: 1px solid #eef2f7 }
+
+/* Auto populate invoice number button */
+.auto-pop-btn {
+  padding: 0.4rem 0.6rem;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(90deg,#64748b,#0ea5e9);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+}
+.auto-pop-btn:hover { filter: brightness(1.05) }
+.auto-pop-btn:active { transform: translateY(1px) }
+
+/* BL dropdown styling placed next to search */
+.bl-dropdown {
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  background: #fff;
+  font-weight: 600;
+}
+.bl-dropdown:disabled { opacity: 0.6; cursor: not-allowed }
+
+/* Apply BL button style */
+.bl-apply-btn {
+  padding: 0.45rem 0.65rem;
+  border-radius: 8px;
+  border: none;
+  background: linear-gradient(90deg,#3b82f6,#06b6d4);
+  color: white;
+  font-weight: 700;
+  cursor: pointer;
+}
+.bl-apply-btn:hover { filter: brightness(1.05) }
+
+/* Styles for the Invoices list search inputs: Customer, Ref # and Invoice # */
+.invoice-search input {
+  padding: 0.45rem 0.6rem;
+  border-radius: 8px;
+  border: 1px solid #e6edf3;
+  background: #fff;
+  min-width: 160px;
+  color: #0f172a;
+}
+
+.invoice-search input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 4px rgba(96,165,250,0.06);
+}
+
+.invoice-search .search-btn {
+  padding: 0.45rem 0.75rem;
+  border-radius: 8px;
+}
+
+/* Autocomplete list for the customer field inside the invoice search */
+.invoice-search .ac-list {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 220px;
+  max-height: 220px;
+  overflow: auto;
+  background: #fff;
+  border: 1px solid rgba(16,24,40,0.08);
+  box-shadow: 0 8px 20px rgba(2,6,23,0.12);
+  border-radius: 8px;
+  padding: 6px 0;
+  z-index: 9999;
+  list-style: none;
+}
+.invoice-search .ac-list li { padding: 8px 12px; cursor: pointer }
+.invoice-search .ac-list li.active, .invoice-search .ac-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
+

@@ -1,0 +1,211 @@
+/* Refresh dashboard styles for a cleaner, modern look */
+
+.dashboard-root {
+  /* Ensure the dashboard background spans the full viewport width */
+  min-height: 100vh;
+  background: linear-gradient(180deg,#f8fafc 0%, #eef2ff 100%);
+  color: #0f172a;
+  font-family: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+  width: 100vw; /* full viewport width */
+  position: relative;
+  box-sizing: border-box;
+  overflow-x: hidden; /* prevent horizontal scroll when header is full-bleed */
+}
+
+/* Full-bleed sticky header with a centered inner container */
+.dashboard-header {
+  position: sticky;
+  top: 0;
+  left: 0;
+  width: 100%;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.06);
+  z-index: 40;
+}
+.dashboard-header .header-inner {
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.25rem;
+  box-sizing: border-box;
+}
+
+
+
+.brand-area {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+.brand-area h1 {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+.welcome {
+  color: #64748b;
+  font-size: 0.9rem;
+}
+
+.header-controls {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-left: auto; /* ensure controls (logout) stick to the right */
+}
+
+.btn-logout {
+  background: linear-gradient(90deg,#ef4444,#ef7373);
+  color: white;
+  border: none;
+  padding: 0.5rem 0.8rem;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 600;
+  min-width: 84px;
+  margin-right: 10px; /* add requested right margin */
+}
+
+/* Main content container centered with max width */
+.dashboard-layout {
+  /* allow the layout to fill the remaining viewport to the right of the fixed sidebar */
+  max-width: none;
+  margin: 1.25rem 12px;
+  display: flex;
+  gap: 1rem; /* increase gap so content sits farther from sidebar */
+  padding: 0 1rem 2rem;
+  box-sizing: border-box;
+  /* reserve space for fixed sidebar: left offset (12) + sidebar width (220) + extra gap (28) = 260 */
+  padding-left: 260px;
+  width: calc(100vw - 260px - 24px);
+}
+
+.dashboard-sidebar {
+  width: 220px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 0.75rem;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+  height: fit-content;
+}
+
+.dashboard-sidebar nav ul {
+  list-style: none;
+  padding: 0.4rem;
+  margin: 0;
+}
+
+.dashboard-sidebar nav ul li {
+  padding: 0.65rem 0.9rem;
+  cursor: pointer;
+  color: #0f172a;
+  border-radius: 8px;
+  margin-bottom: 0.4rem;
+  font-weight: 600;
+}
+
+.dashboard-sidebar nav ul li:hover {
+  background: #f1f5f9;
+}
+
+.dashboard-sidebar nav ul li.active {
+  background: linear-gradient(90deg,#2563eb,#4f46e5);
+  color: white;
+}
+
+.content-column {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.side-panel {
+  width: 320px;
+  min-height: 120px;
+  background: #ffffff;
+  border-radius: 12px;
+  padding: 1rem;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+}
+
+.panel {
+  background: white;
+  padding: 1.1rem;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+}
+
+.panel h2, .panel h3 {
+  margin: 0 0 0.6rem 0;
+}
+
+.invoice-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 0.6rem;
+}
+
+.invoice-table th, .invoice-table td {
+  padding: 0.6rem 0.8rem;
+  border-bottom: 1px solid #eef2f7;
+  text-align: left;
+  font-size: 0.95rem;
+}
+
+.invoice-table thead th {
+  color: #475569;
+  font-weight: 700;
+  background: #fbfdff;
+}
+
+.invoice-table .right { text-align: right }
+
+/* Make sidebar flush to left on wide screens by fixing it to viewport and offsetting main layout */
+@media (min-width: 900px) {
+  .dashboard-sidebar {
+    position: fixed;
+    top: 80px; /* sit below the sticky header */
+    left: 12px; /* close to the left edge */
+    bottom: 20px; /* stretch down to near the bottom */
+    width: 220px;
+    margin: 0;
+    z-index: 30;
+    box-shadow: 0 6px 18px rgba(15,23,42,0.04);
+    overflow-y: auto; /* allow scrolling when content exceeds height */
+    height: auto;
+  }
+
+  /* Move the centered layout content to the right so it doesn't sit under the fixed sidebar */
+  .dashboard-layout {
+    /* wide-screen: fill remaining viewport to right of sidebar */
+    max-width: none;
+    margin: 1.25rem 12px;
+    display: flex;
+    gap: 1rem;
+    padding: 0 1rem 2rem;
+    box-sizing: border-box;
+    padding-left: 260px;
+    width: calc(100vw - 260px - 24px);
+  }
+}
+
+/* On small screens the sidebar stays inline */
+@media (max-width: 899px) {
+  .dashboard-sidebar {
+    position: relative;
+    left: 0;
+    top: 0;
+    width: 100%;
+    box-shadow: none;
+  }
+  .dashboard-layout { padding-left: 0; }
+}
+
+/* ensure main area flexes and won't shrink */
+.dashboard-main {
+  flex: 1;
+  min-width: 0;
+}
