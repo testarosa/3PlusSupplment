@@ -89,6 +89,20 @@ export async function fetchInvoiceTemplateById(id) {
   }
 }
 
+export async function fetchInvoiceTemplatesByCustomer(billToName) {
+  if (!billToName) throw new Error('billToName is required')
+  try {
+    const endpoint = `${TEMPLATES_PATH}/by-customer?billToName=${encodeURIComponent(billToName)}`
+    const res = await api.get(endpoint, { headers: { accept: 'text/plain' } })
+    const payload = res?.data
+    const list = Array.isArray(payload?.data) ? payload.data.map(normalizeTemplate).filter(Boolean) : []
+    return list
+  } catch (err) {
+    console.warn('[fetchInvoiceTemplatesByCustomer] error', err?.message || err)
+    throw err
+  }
+}
+
 // DELETE /api/InvoiceTemplates/{id}
 export async function deleteInvoiceTemplate(id) {
   if (!id && id !== 0) throw new Error('Template id is required for delete')

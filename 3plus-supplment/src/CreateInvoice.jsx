@@ -4,6 +4,8 @@ import './CreateInvoiceTemplate.css'
 import DatePicker from 'react-datepicker'
 import 'react-datepicker/dist/react-datepicker.css'
 import { getBillingCodes } from './api/billingCodes'
+import { fetchInvoiceTemplatesByCustomer } from './api/invoiceTemplates'
+import { getInvoiceByRef } from './api/invoices'
 
 const normalizeCustomerOption = (input) => {
   if (!input) return null
@@ -46,6 +48,7 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
   const [billTo, setBillTo] = useState(initialData?.billTo ?? '')
   const [acBill, setAcBill] = useState({ list: [], index: -1, visible: false, query: '' })
   const [customerOptions, setCustomerOptions] = useState([])
+  const [blMeta, setBlMeta] = useState({})
   const billLookupRef = useRef(null)
   const parseDate = (v) => {
     if (!v) return null
@@ -57,11 +60,18 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
 
   const [invoicePostDate, setInvoicePostDate] = useState(parseDate(initialData?.invoicePostDate) ?? new Date())
   const [invoiceDate, setInvoiceDate] = useState(parseDate(initialData?.invoiceDate) ?? new Date())
-  const [dueDate, setDueDate] = useState(parseDate(initialData?.dueDate) ?? (() => { const d = new Date(); d.setDate(d.getDate() + 30); return d })())
+  const [dueDate, setDueDate] = useState(parseDate(initialData?.dueDate) ?? null)
+  const [netTerm, setNetTerm] = useState(() => {
+    if (initialData?.netTerm === 0) return 0
+    if (initialData?.netTerm) return Number(initialData.netTerm) || 0
+    return ''
+  })
   const [invoiceNumber, setInvoiceNumber] = useState(initialData?.invoiceNumber ?? '')
   // Ref/search state (re-added per request)
   const [refSearchTerm, setRefSearchTerm] = useState(initialData?.ref ?? '')
   const [selectedRef, setSelectedRef] = useState(initialData?.ref ?? '')
+  const [refLookupError, setRefLookupError] = useState(null)
+  const [refSearching, setRefSearching] = useState(false)
 
   // Populate BL list on mount: prefer sessionStorage templates -> fallback generated demo BLs
   React.useEffect(() => {
@@ -71,6 +81,7 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
         const bls = Array.from(new Set(templates.flatMap((t) => (Array.isArray(t.blNumbers) ? t.blNumbers : [])).filter(Boolean)))
         if (bls.length) {
           setAcBL({ list: bls.slice(0, 50), index: 0, visible: false })
+          setBlMeta({})
           return
         }
       }
@@ -80,6 +91,7 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
     // fallback demo BLs
     const generated = Array.from({ length: 5 }, (_, i) => `BL-${(i + 1).toString().padStart(3, '0')}`)
     setAcBL((s) => ({ ...s, list: generated, index: generated.length ? 0 : -1, visible: false }))
+    setBlMeta({})
   }, [])
 
   useEffect(() => {
@@ -110,70 +122,152 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
     setRefSearchTerm(val)
   }
 
-  const doRefSearch = (e) => {
-    if (e && e.preventDefault) e.preventDefault()
-    setSelectedRef(refSearchTerm)
-    // Populate BL list for this ref. Try to read from sessionStorage templates (key: 'templates')
+  const formatBillToFromMeta = (meta) => {
+    if (!meta) return ''
+    const parts = []
+    if (meta.customerName) parts.push(meta.customerName)
+    if (meta.customerShort && meta.customerShort !== meta.customerName) parts.push(meta.customerShort)
+    return parts.join(' - ')
+  }
+
+  const applyTemplateBLFallback = (refValue) => {
+    let handled = false
     try {
       const templates = JSON.parse(sessionStorage.getItem('templates') || 'null')
       if (Array.isArray(templates)) {
-        const t = templates.find((it) => (it.ref || '').toLowerCase() === (refSearchTerm || '').toLowerCase())
+        const t = templates.find((it) => (it.ref || '').toLowerCase() === (refValue || '').toLowerCase())
         if (t && Array.isArray(t.blNumbers) && t.blNumbers.length) {
           const list = t.blNumbers.slice(0, 50)
-          setAcBL({ list, index: 0, visible: false })
-          setSelectedBL('')
-          return
+          setAcBL({ list, index: list.length ? 0 : -1, visible: false })
+          setBlMeta({})
+          handled = true
         }
       }
     } catch (err) {
-      // ignore
+      // ignore fallback errors
     }
 
-    // Fallback: generate demo BL numbers based on the ref string
-    const refKey = (refSearchTerm || 'REF').replace(/[^a-zA-Z0-9-]/g, '') || 'REF'
-    const generated = Array.from({ length: 5 }, (_, i) => `${refKey}-BL-${(i + 1).toString().padStart(3, '0')}`)
-    setAcBL({ list: generated, index: 0, visible: false })
+    if (!handled) {
+      const refKey = (refValue || 'REF').replace(/[^a-zA-Z0-9-]/g, '') || 'REF'
+      const generated = Array.from({ length: 5 }, (_, i) => `${refKey}-BL-${(i + 1).toString().padStart(3, '0')}`)
+      setAcBL({ list: generated, index: generated.length ? 0 : -1, visible: false })
+      setBlMeta({})
+    }
+
     setSelectedBL('')
+    return handled
+  }
+
+  const doRefSearch = async (e) => {
+    if (e && e.preventDefault) e.preventDefault()
+    const query = (refSearchTerm || '').trim()
+    if (!query) {
+      setSelectedRef('')
+      setSelectedBL('')
+      setAcBL((s) => ({ ...s, list: [], index: -1, visible: false }))
+      setBlMeta({})
+      setRefLookupError('Reference number is required')
+      return
+    }
+
+    setSelectedRef(query)
+    setRefLookupError(null)
+  const today = new Date()
+  setInvoicePostDate(today)
+  setInvoiceDate(today)
+  setNetTerm('')
+  setDueDate(null)
+  setInvoiceNumber('')
+  setItems([])
+    setRefSearching(true)
+    try {
+      const response = await getInvoiceByRef(query)
+      let payload = response
+      if (typeof payload === 'string') {
+        try {
+          payload = JSON.parse(payload)
+        } catch (err) {
+          // leave payload as-is if parsing fails
+        }
+      }
+
+      if (payload && typeof payload === 'object' && payload.data) {
+        payload = payload.data
+      }
+
+      const mbl = (payload?.tOIMMainDto?.fMblno || '').toString().trim()
+      const hblRows = Array.isArray(payload?.tOIHMainDtos) ? payload.tOIHMainDtos : []
+      const extractNames = (row = {}) => ({
+        customerName: (row.fCustomerName ?? row.fCustomer ?? row.fCname ?? '').toString().trim(),
+        customerShort: (row.fCustomerSName ?? '').toString().trim()
+      })
+      const hblNumbers = hblRows
+        .map((row) => ({
+          number: (row?.fHblno || '').toString().trim(),
+          meta: extractNames(row)
+        }))
+        .filter((entry) => entry.number)
+
+      const metaMap = {}
+      const firstHouse = hblNumbers[0]
+      if (mbl) {
+        metaMap[mbl] = { kind: 'MBL', ...(firstHouse ? firstHouse.meta : { customerName: '', customerShort: '' }) }
+      }
+      hblNumbers.forEach(({ number, meta }) => {
+        metaMap[number] = { kind: 'HBL', ...meta }
+      })
+
+      const combinedList = []
+      if (mbl) combinedList.push(mbl)
+      combinedList.push(...hblNumbers.map((entry) => entry.number))
+
+      if (combinedList.length) {
+        setAcBL({ list: combinedList, index: combinedList.length ? 0 : -1, visible: false })
+        setBlMeta(metaMap)
+        setSelectedBL('')
+        return
+      }
+
+      setRefLookupError('No BL information returned for this reference.')
+      applyTemplateBLFallback(query)
+    } catch (err) {
+      console.warn('[CreateInvoice] invoice lookup failed', err)
+      setRefLookupError(err?.message || 'Unable to load invoice details')
+      setBlMeta({})
+      applyTemplateBLFallback(query)
+    } finally {
+      setRefSearching(false)
+    }
   }
 
   // initialize header fields when selectedRef or selectedBL change
   const refreshHeader = (refVal, blVal) => {
-    // compute defaults
-  const today = new Date()
-
+    if (!refVal && !blVal) return
     // billTo from templates if available
     let bt = ''
-    let term = 30
     try {
       const templates = JSON.parse(sessionStorage.getItem('templates') || 'null')
       if (Array.isArray(templates)) {
-        // try to find a template that matches ref or includes the selected BL, otherwise fall back to the first template
         let t = null
         if (refVal) t = templates.find((it) => (it.ref || '').toLowerCase() === (refVal || '').toLowerCase())
         if (!t && blVal) t = templates.find((it) => Array.isArray(it.blNumbers) && it.blNumbers.includes(blVal))
         if (!t && templates.length) t = templates[0]
-        if (t) {
-          if (t.customer) bt = t.customer
-          if (Number.isFinite(Number(t.netTerm))) term = Number(t.netTerm)
-        }
+        if (t && t.customer) bt = t.customer
       }
     } catch (err) { /* ignore */ }
 
-  const post = today
-  const inv = today
-  const dueD = (() => { const d = new Date(); d.setDate(d.getDate() + term); return d })()
-    const invNum = blVal ? `${blVal}-INV-${Date.now().toString().slice(-6)}` : (refVal ? `${refVal}-INV-${Date.now().toString().slice(-6)}` : `INV-${Date.now().toString().slice(-6)}`)
+    const metaOverride = blMeta?.[blVal]
+    if (metaOverride) {
+      const combined = formatBillToFromMeta(metaOverride)
+      if (combined) bt = combined
+    }
 
     setBillTo(bt)
-  setInvoicePostDate(post)
-  setInvoiceDate(inv)
-  setDueDate(dueD)
-    setInvoiceNumber(invNum)
   }
 
   React.useEffect(() => {
     refreshHeader(selectedRef, selectedBL)
-  }, [selectedRef, selectedBL])
+  }, [selectedRef, selectedBL, blMeta])
 
   const handleBillChange = (val) => {
     setBillTo(val)
@@ -220,34 +314,42 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
     setAcBill({ list: [], index: -1, visible: false, query: '' })
   }
 
-  const handleAutoPopulate = () => {
-    const invNum = selectedBL
-      ? `${selectedBL}-INV-${Date.now().toString().slice(-6)}`
-      : `INV-${Date.now().toString().slice(-8)}`
-    setInvoiceNumber(invNum)
+  const handleAutoPopulate = async () => {
+    const normalizedBillTo = (billTo || '').trim()
+    if (!normalizedBillTo) {
+      setRefLookupError('Bill To is required before auto-populating invoice details.')
+      return
+    }
 
     try {
-      const templates = JSON.parse(sessionStorage.getItem('templates') || 'null')
-      if (Array.isArray(templates) && (billTo || '').trim()) {
-        const cust = (billTo || '').trim().toLowerCase()
-        const match = templates.find((t) => {
-          const name = (t.customerName || t.customer || '').toString().trim().toLowerCase()
-          return name && name === cust
-        })
-        if (match && Array.isArray(match.items) && match.items.length) {
-          const mapped = match.items.map((it, idx) => ({
-            id: idx + 1,
-            billingCode: it.billingCode || it.code || '',
-            description: it.description || it.desc || '',
-            rate: typeof it.rate !== 'undefined' ? it.rate : (it.amount || 0),
-            qty: typeof it.qty !== 'undefined' ? it.qty : 1
-          }))
-          setItems(mapped)
-          return
-        }
+      const templates = await fetchInvoiceTemplatesByCustomer(normalizedBillTo)
+      const template = Array.isArray(templates) && templates.length ? templates[0] : null
+      if (!template || !template.items?.length) {
+        setRefLookupError('No invoice template found for this Bill To.')
+        return
       }
+
+      const templateTerm = Number(template.netTerm)
+      if (!Number.isNaN(templateTerm) && templateTerm >= 0) {
+        setNetTerm(templateTerm)
+        const baseDate = invoiceDate instanceof Date ? invoiceDate : new Date(invoiceDate || Date.now())
+        const due = new Date(baseDate)
+        due.setDate(due.getDate() + templateTerm)
+        setDueDate(due)
+      }
+
+      const mapped = template.items.map((it, idx) => ({
+        id: idx + 1,
+        billingCode: it.billingCode || it.code || '',
+        description: it.description || it.desc || '',
+        rate: typeof it.rate !== 'undefined' ? it.rate : (it.amount || 0),
+        qty: typeof it.qty !== 'undefined' ? it.qty : 1
+      }))
+      setItems(mapped)
+      setRefLookupError(null)
     } catch (err) {
-      // ignore; leave items as-is
+      console.warn('[CreateInvoice] auto populate lookup failed', err)
+      setRefLookupError(err?.message || 'Unable to load invoice template for this Bill To.')
     }
   }
 
@@ -373,7 +475,13 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
                   />
                 </div>
 
-                <button className="search-btn ref-search-btn" onClick={doRefSearch}>Search</button>
+                <button
+                  className="search-btn ref-search-btn"
+                  type="submit"
+                  disabled={refSearching}
+                >
+                  {refSearching ? 'Searching...' : 'Search'}
+                </button>
               </div>
 
               <div style={{ marginTop: '0.75rem' }}>
@@ -390,6 +498,10 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
                   ))}
                 </select>
               </div>
+
+              {refLookupError && (
+                <div className="error-row" style={{ marginTop: '0.5rem' }}>{refLookupError}</div>
+              )}
             </div>
           </form>
           {/* Editable invoice header row */}
@@ -462,6 +574,31 @@ function CreateInvoice({ initialData = {}, title = 'Create Invoice', onCancel = 
           <div className="field">
             <label>Invoice Date</label>
             <DatePicker className="readonly-input" selected={invoiceDate} onChange={(d) => setInvoiceDate(d)} dateFormat="yyyy-MM-dd" />
+          </div>
+
+          <div className="field">
+            <label>Term (days)</label>
+            <input
+              type="number"
+              className="readonly-input"
+              value={netTerm}
+              min={0}
+              onChange={(e) => {
+                const raw = e.target.value
+                if (raw === '') {
+                  setNetTerm('')
+                  setDueDate(null)
+                  return
+                }
+                const value = Number(raw)
+                if (Number.isNaN(value)) return
+                setNetTerm(value)
+                const baseDate = invoiceDate instanceof Date ? invoiceDate : new Date(invoiceDate || Date.now())
+                const due = new Date(baseDate)
+                due.setDate(due.getDate() + value)
+                setDueDate(due)
+              }}
+            />
           </div>
 
           <div className="field">
