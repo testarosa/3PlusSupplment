@@ -1,11 +1,7 @@
 import { createSlice } from '@reduxjs/toolkit'
 
 const initialState = {
-  items: [
-    { id: '#1001', customer: 'ABC Co.', ref: 'REF-1001', invoiceNumber: 'INV-1001', postDate: '2025-10-01', invoiceDate: '2025-10-02', dueDate: '2025-11-01', amount: 1200.0, status: 'Paid' },
-    { id: '#1002', customer: 'XYZ Ltd.', ref: 'REF-2002', invoiceNumber: 'INV-2002', postDate: '2025-10-15', invoiceDate: '2025-10-16', dueDate: '2025-11-15', amount: 420.0, status: 'Due' },
-    { id: '#1003', customer: 'Acme Inc.', ref: 'REF-3003', invoiceNumber: 'INV-3003', postDate: '2025-09-20', invoiceDate: '2025-09-21', dueDate: '2025-10-21', amount: 980.0, status: 'Due' }
-  ],
+  items: [],
   currentInvoice: null,
   loading: false,
   error: null,

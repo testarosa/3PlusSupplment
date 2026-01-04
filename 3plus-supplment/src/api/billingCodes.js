@@ -1,7 +1,7 @@
 import axios from "axios";
 
 export async function getBillingCodes(query) {
-  const base = "http://192.168.20.207:5048";
+  const base = "http://192.168.20.240:5048";
   const endpoint = `${base}/BillingCode/GetBillingCode?billingCode=${encodeURIComponent(
     query || ""
   )}`;

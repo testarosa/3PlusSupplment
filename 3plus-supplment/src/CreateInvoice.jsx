@@ -1,17 +1,29 @@
 import React, { useState, useMemo, useRef, useEffect } from "react";
+import { useSelector } from "react-redux";
 import "./CreateInvoice.css";
 import "./CreateInvoiceTemplate.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { getBillingCodes } from "./api/billingCodes";
 import { fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
 import { getInvoiceByRef, saveInvoice } from "./api/invoices";
+import { getCustomersByName } from "./api/customers";
+import { selectAuth } from "./store/slices/authSlice";
+
+const TB_NAME_OIM = "T_OIMMAIN";
+const TB_NAME_OIH = "T_OIHMAIN";
+
+const coerceNumber = (value) => {
+  if (value === null || typeof value === "undefined") return null;
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const parsed = Number(value);
+  return Number.isNaN(parsed) ? null : parsed;
+};
 
 const normalizeCustomerOption = (input) => {
   if (!input) return null;
   if (typeof input === "string") {
     const trimmed = input.trim();
-    return trimmed ? { name: trimmed, value: trimmed } : null;
+    return trimmed ? { name: trimmed, value: trimmed, id: null } : null;
   }
   const name = (
     input.name ??
@@ -22,10 +34,26 @@ const normalizeCustomerOption = (input) => {
   )
     .toString()
     .trim();
+  const idRaw =
+    input.id ??
+    input.Id ??
+    input.customerId ??
+    input.CustomerId ??
+    input.customerID ??
+    input.CustomerID;
   const valueRaw = input.value ?? input.Value ?? input.code ?? input.Code;
-  const value = valueRaw != null ? valueRaw.toString() : name;
+  const value =
+    valueRaw != null
+      ? valueRaw.toString()
+      : idRaw != null
+      ? idRaw.toString()
+      : name;
   if (!name && !value) return null;
-  return { name: name || value, value: value || name };
+  return {
+    name: name || value,
+    value: value || name,
+    id: typeof idRaw !== "undefined" && idRaw !== null ? idRaw : null,
+  };
 };
 
 const dedupeCustomerOptions = (list) => {
@@ -53,11 +81,36 @@ function CreateInvoice({
   title = "Create Invoice",
   onCancel = null,
 }) {
+  const auth = useSelector(selectAuth);
+  const currentUser = auth?.user ?? null;
+  const userBranch =
+    currentUser?.branch ??
+    currentUser?.Branch ??
+    currentUser?.branchCode ??
+    currentUser?.BranchCode ??
+    currentUser?.branchId ??
+    currentUser?.BranchId ??
+    currentUser?.branchName ??
+    currentUser?.BranchName ??
+    currentUser?.fBranch ??
+    currentUser?.F_Branch ??
+    "";
+  const userIdForPayload =
+    currentUser?.userId ??
+    currentUser?.userID ??
+    currentUser?.UserId ??
+    currentUser?.UserID ??
+    currentUser?.id ??
+    currentUser?.Id ??
+    "";
   // BL list is populated from templates or demo fallback (no Ref input in this UI)
   const [acBL, setAcBL] = useState({ list: [], index: -1, visible: false });
   const [selectedBL, setSelectedBL] = useState("");
   // editable header fields
   const [billTo, setBillTo] = useState(initialData?.billTo ?? "");
+  const [selectedCustomerId, setSelectedCustomerId] = useState(
+    initialData?.customerId ?? null
+  );
   const [acBill, setAcBill] = useState({
     list: [],
     index: -1,
@@ -166,7 +219,7 @@ function CreateInvoice({
       /* ignore */
     }
     setCustomerOptions(
-      dedupeCustomerOptions(["ABC Co.", "XYZ Ltd.", "Acme Inc."])
+      dedupeCustomerOptions([])
     );
   }, []);
 
@@ -246,6 +299,7 @@ function CreateInvoice({
     setInvoiceNumber("");
     setItems([]);
     setRefSearching(true);
+    
     try {
       const response = await getInvoiceByRef(query);
       let payload = response;
@@ -275,21 +329,42 @@ function CreateInvoice({
         .map((row) => ({
           number: (row?.fHblno || "").toString().trim(),
           meta: extractNames(row),
+          recordId:
+            row?.fId ??
+            row?.FId ??
+            row?.fid ??
+            row?.id ??
+            row?.Id ??
+            null,
         }))
         .filter((entry) => entry.number);
 
       const metaMap = {};
       const firstHouse = hblNumbers[0];
       if (mbl) {
+        const masterRecordId =
+          payload?.tOIMMainDto?.fId ??
+          payload?.tOIMMainDto?.FId ??
+          payload?.tOIMMainDto?.fid ??
+          payload?.tOIMMainDto?.id ??
+          payload?.tOIMMainDto?.Id ??
+          null;
         metaMap[mbl] = {
           kind: "MBL",
+          recordId: coerceNumber(masterRecordId),
+          tbName: TB_NAME_OIM,
           ...(firstHouse
             ? firstHouse.meta
             : { customerName: "", customerShort: "" }),
         };
       }
-      hblNumbers.forEach(({ number, meta }) => {
-        metaMap[number] = { kind: "HBL", ...meta };
+      hblNumbers.forEach(({ number, meta, recordId }) => {
+        metaMap[number] = {
+          kind: "HBL",
+          recordId: coerceNumber(recordId),
+          tbName: TB_NAME_OIH,
+          ...meta,
+        };
       });
 
       const combinedList = [];
@@ -353,6 +428,7 @@ function CreateInvoice({
     }
 
     setBillTo(bt);
+    setSelectedCustomerId(null);
   };
 
   React.useEffect(() => {
@@ -361,6 +437,7 @@ function CreateInvoice({
 
   const handleBillChange = (val) => {
     setBillTo(val);
+    setSelectedCustomerId(null);
     if (billLookupRef.current) {
       clearTimeout(billLookupRef.current);
       billLookupRef.current = null;
@@ -401,16 +478,27 @@ function CreateInvoice({
 
     billLookupRef.current = setTimeout(async () => {
       try {
-        const results = await getBillingCodes(q);
+        const results = await getCustomersByName(q);
         const normalized = dedupeCustomerOptions(results);
-        setAcBill({
-          list: normalized,
-          index: normalized.length ? 0 : -1,
-          visible: normalized.length > 0,
-          query: val,
-        });
+        if (!normalized.length) {
+          setAcBill({
+            list: [
+              { name: "No customers found", value: "__empty", disabled: true },
+            ],
+            index: 0,
+            visible: true,
+            query: val,
+          });
+        } else {
+          setAcBill({
+            list: normalized,
+            index: 0,
+            visible: true,
+            query: val,
+          });
+        }
       } catch (err) {
-        console.warn("[CreateInvoice] billing code lookup failed", err);
+        console.warn("[CreateInvoice] customer lookup failed", err);
         setAcBill({ list: [], index: -1, visible: false, query: val });
       } finally {
         billLookupRef.current = null;
@@ -419,10 +507,14 @@ function CreateInvoice({
   };
 
   const selectBill = (val) => {
-    if (!val || val.value === "__loading") return;
+    if (!val || val.value === "__loading" || val.value === "__empty")
+      return;
     const normalized = normalizeCustomerOption(val);
     if (!normalized) return;
     setBillTo(normalized.name);
+    const parsedId =
+      coerceNumber(normalized.id) ?? coerceNumber(normalized.value);
+    setSelectedCustomerId(parsedId ?? null);
     setAcBill({ list: [], index: -1, visible: false, query: "" });
   };
 
@@ -494,16 +586,7 @@ function CreateInvoice({
   const refs = useRef({});
 
   // Billing code autocomplete options (sample/demo data)
-  const billingCodeOptions = [
-    { code: "BC-001", desc: "Standard Item A" },
-    { code: "BC-002", desc: "Standard Item B" },
-    { code: "SERV-100", desc: "Consulting Service" },
-    { code: "PROD-200", desc: "Product 200" },
-    { code: "CONSULT", desc: "Consulting (hourly)" },
-    { code: "SETUP", desc: "Setup Fee" },
-    { code: "MAINT", desc: "Maintenance" },
-    { code: "DISCOUNT", desc: "Discount / Credit" },
-  ];
+  const billingCodeOptions = [];
 
   const [ac, setAc] = useState({
     id: null,
@@ -578,6 +661,12 @@ function CreateInvoice({
     [items]
   );
 
+  const getSelectedBlMeta = () => {
+    if (selectedBL && blMeta?.[selectedBL]) return blMeta[selectedBL];
+    const keys = Object.keys(blMeta || {});
+    return keys.length ? blMeta[keys[0]] : null;
+  };
+
   const handleSaveInvoice = async (e) => {
     e?.preventDefault();
 
@@ -604,18 +693,28 @@ function CreateInvoice({
         );
       }, 0);
 
+      const selectedMeta = getSelectedBlMeta();
+      const resolvedTbId = coerceNumber(selectedMeta?.recordId) ?? 161909;
+      const resolvedTbName =
+        selectedMeta?.tbName ??
+        (selectedMeta?.kind === "MBL"
+          ? TB_NAME_OIM
+          : selectedMeta?.kind === "HBL"
+          ? TB_NAME_OIH
+          : "T_OIHMAIN");
+
       // Prepare API payload
       const apiPayload = {
-        branch: "IFF", // Default value, could be configurable
-        tbId: 161909, // Default value, could be configurable
-        tbName: "T_OIHMAIN", // Default value, could be configurable
-        customerId: 10336, // Default value - in a real app, this would come from customer selection
+        branch: userBranch || "",
+        tbId: resolvedTbId,
+        tbName: resolvedTbName,
+        customerId: selectedCustomerId ?? 0,
         postDate: formatDateForAPI(invoicePostDate),
         invoiceDate: formatDateForAPI(invoiceDate),
         dueDate: formatDateForAPI(dueDate),
         invoiceAmount: invoiceAmount,
         customerRefNo: selectedRef || "",
-        userID: "pom", // Default value, could be from auth context
+        userID: userIdForPayload || "",
         oiRates: oiRates,
       };
 

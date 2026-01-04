@@ -19,7 +19,7 @@ export default function Login({ onSuccess } = {}) {
     try {
       // Build the external login URL the user provided if needed.
       // Using the provided example endpoint which expects query params.
-      const externalUrl = `http://192.168.20.207:5048/Auth/Login?userId=${encodeURIComponent(
+      const externalUrl = `http://192.168.20.240:5048/Auth/Login?userId=${encodeURIComponent(
         username
       )}&password=${encodeURIComponent(password)}`;
 

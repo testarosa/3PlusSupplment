@@ -17,6 +17,13 @@ function Dashboard({ onLogout, user: propUser }) {
   const dispatch = useDispatch()
   const auth = useSelector(selectAuth)
   const user = auth?.user ?? propUser
+  const displayName =
+    user?.userName ??
+    user?.username ??
+    user?.name ??
+    user?.userId ??
+    user?.F_UserName ??
+    'User'
 
   // Small invoices list component with Ref# and Invoice# search inputs
   const InvoiceList = () => {
@@ -228,7 +235,7 @@ function Dashboard({ onLogout, user: propUser }) {
         <div className="header-inner">
           <div className="brand-area">
             <h1>Dashboard</h1>
-            <div className="welcome">Welcome, {user?.F_UserName ?? user?.username ?? 'User'}</div>
+            <div className="welcome">Welcome, {displayName}</div>
           </div>
           <div className="header-controls">
             <button className="btn-logout" onClick={onLogout}>Logout</button>
