@@ -1,10 +1,12 @@
 import axios from "axios";
+import { buildApiUrl } from "./config";
 
 export async function getBillingCodes(query) {
-  const base = "http://192.168.20.240:5048";
-  const endpoint = `${base}/BillingCode/GetBillingCode?billingCode=${encodeURIComponent(
-    query || ""
-  )}`;
+  
+  const endpoint = buildApiUrl(
+    `/BillingCode/GetBillingCode?billingCode=${encodeURIComponent(query || "")}`
+  );
+
   try {
     console.debug("[getBillingCodes] GET", endpoint);
     const resp = await axios.get(endpoint, {

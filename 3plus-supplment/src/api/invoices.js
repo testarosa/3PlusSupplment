@@ -1,15 +1,14 @@
 import axios from "axios";
-
-const BASE_URL = "http://192.168.20.240:5048";
+import { buildInvoiceApiUrl } from "./config";
 
 export async function getInvoiceByRef(referenceNumber) {
   if (!referenceNumber) {
     throw new Error("Reference number is required");
   }
 
-  const endpoint = `${BASE_URL}/Invoice/GetInvoice/${encodeURIComponent(
-    referenceNumber
-  )}`;
+  const endpoint = buildInvoiceApiUrl(
+    `/Invoice/GetInvoice/${encodeURIComponent(referenceNumber)}`
+  );
 
   const resp = await axios.get(endpoint, {
     headers: { accept: "text/plain, application/json" },
@@ -28,7 +27,7 @@ export async function getInvoiceByRef(referenceNumber) {
 }
 
 export async function saveInvoice(invoiceData) {
-  const endpoint = `${BASE_URL}/Invoice/SaveInvoice`;
+  const endpoint = buildInvoiceApiUrl('/Invoice/SaveInvoice');
 
   const resp = await axios.post(endpoint, invoiceData, {
     headers: {

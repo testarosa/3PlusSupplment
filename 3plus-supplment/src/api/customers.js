@@ -1,8 +1,8 @@
 import axios from 'axios'
+import { buildApiUrl } from './config'
 
 export async function getCustomersByName(name) {
-  const base = 'http://192.168.20.240:5048'
-  const endpoint = `${base}/Customer/GetCustomers?name=${encodeURIComponent(name || '')}`
+  const endpoint = buildApiUrl(`/Customer/GetCustomers?name=${encodeURIComponent(name || '')}`)
   try {
     console.debug('[getCustomersByName] GET', endpoint)
     const resp = await axios.get(endpoint, { headers: { accept: 'text/plain, application/json' } })

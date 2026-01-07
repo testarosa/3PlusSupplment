@@ -7,6 +7,7 @@ import "react-datepicker/dist/react-datepicker.css";
 import { fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
 import { getInvoiceByRef, saveInvoice } from "./api/invoices";
 import { getCustomersByName } from "./api/customers";
+import { getBillingCodes } from "./api/billingCodes";
 import { selectAuth } from "./store/slices/authSlice";
 
 const TB_NAME_OIM = "T_OIMMAIN";
@@ -74,6 +75,28 @@ const optionLabel = (opt) => {
   if (!opt) return "";
   if (typeof opt === "string") return opt;
   return opt.name || opt.value || "";
+};
+
+const metaToCustomerOption = (meta) => {
+  if (!meta) return null;
+  return normalizeCustomerOption({
+    name:
+      meta.customerName ||
+      meta.customerShort ||
+      meta.customerCode ||
+      meta.customer ||
+      meta.customerLabel ||
+      "",
+    value:
+      meta.customerCode ||
+      meta.customerShort ||
+      meta.customerName ||
+      meta.customer ||
+      meta.customerLabel ||
+      meta.customerId ||
+      "",
+    id: meta.customerId ?? meta.customerCode ?? null,
+  });
 };
 
 function CreateInvoice({
@@ -177,10 +200,7 @@ function CreateInvoice({
       // ignore
     }
     // fallback demo BLs
-    const generated = Array.from(
-      { length: 5 },
-      (_, i) => `BL-${(i + 1).toString().padStart(3, "0")}`
-    );
+    const generated = [];
     setAcBL((s) => ({
       ...s,
       list: generated,
@@ -229,12 +249,8 @@ function CreateInvoice({
   };
 
   const formatBillToFromMeta = (meta) => {
-    if (!meta) return "";
-    const parts = [];
-    if (meta.customerName) parts.push(meta.customerName);
-    if (meta.customerShort && meta.customerShort !== meta.customerName)
-      parts.push(meta.customerShort);
-    return parts.join(" - ");
+    const normalized = metaToCustomerOption(meta);
+    return normalized ? optionLabel(normalized) : "";
   };
 
   const applyTemplateBLFallback = (refValue) => {
@@ -319,12 +335,58 @@ function CreateInvoice({
       const hblRows = Array.isArray(payload?.tOIHMainDtos)
         ? payload.tOIHMainDtos
         : [];
-      const extractNames = (row = {}) => ({
-        customerName: (row.fCustomerName ?? row.fCustomer ?? row.fCname ?? "")
-          .toString()
-          .trim(),
-        customerShort: (row.fCustomerSName ?? "").toString().trim(),
-      });
+      const extractNames = (row = {}) => {
+        const toTrimmedString = (value) =>
+          value != null && typeof value !== "object"
+            ? value.toString().trim()
+            : "";
+
+        const rawCode =
+          row.fCustomer ??
+          row.customer ??
+          row.Customer ??
+          row.fCustomerCode ??
+          row.customerCode ??
+          row.CustomerCode ??
+          row.fCustomerNo ??
+          row.customerNo ??
+          row.CustomerNo;
+
+        const rawId =
+          row.fCustomerId ??
+          row.fCustomerID ??
+          row.customerId ??
+          row.customerID ??
+          row.CustomerId ??
+          row.CustomerID ??
+          row.fCustId ??
+          row.fCustID;
+
+        let parsedCustomerId = null;
+        if (rawId != null) {
+          const trimmedId =
+            typeof rawId === "string" ? rawId.trim() : rawId;
+          if (trimmedId !== "") {
+            parsedCustomerId = coerceNumber(trimmedId);
+          }
+        }
+
+        return {
+          customerName: toTrimmedString(
+            row.fCustomerName ??
+              row.customerName ??
+              row.fCname ??
+              row.customer ??
+              row.Customer ??
+              ""
+          ),
+          customerShort: toTrimmedString(
+            row.fCustomerSName ?? row.customerShort ?? row.customerSName ?? ""
+          ),
+          customerCode: toTrimmedString(rawCode),
+          customerId: parsedCustomerId,
+        };
+      };
       const hblNumbers = hblRows
         .map((row) => ({
           number: (row?.fHblno || "").toString().trim(),
@@ -422,13 +484,43 @@ function CreateInvoice({
     }
 
     const metaOverride = blMeta?.[blVal];
+    let derivedCustomerId = null;
     if (metaOverride) {
-      const combined = formatBillToFromMeta(metaOverride);
+      const normalizedMeta = metaToCustomerOption(metaOverride);
+      const combined = normalizedMeta
+        ? optionLabel(normalizedMeta)
+        : formatBillToFromMeta(metaOverride);
       if (combined) bt = combined;
+
+      const normalizedId = normalizedMeta
+        ? coerceNumber(normalizedMeta.id) ?? coerceNumber(normalizedMeta.value)
+        : null;
+      derivedCustomerId =
+        typeof normalizedId === "number"
+          ? normalizedId
+          : coerceNumber(metaOverride.customerId);
+
+      if (normalizedMeta) {
+        setCustomerOptions((prev) => {
+          const label = (optionLabel(normalizedMeta) || "").toLowerCase();
+          const value = (normalizedMeta.value || "")
+            .toString()
+            .toLowerCase();
+          const exists = prev.some(
+            (opt) =>
+              (optionLabel(opt) || "").toLowerCase() === label &&
+              (opt.value || "").toString().toLowerCase() === value
+          );
+          if (exists) return prev;
+          return [...prev, normalizedMeta];
+        });
+      }
     }
 
     setBillTo(bt);
-    setSelectedCustomerId(null);
+    setSelectedCustomerId(
+      typeof derivedCustomerId === "number" ? derivedCustomerId : null
+    );
   };
 
   React.useEffect(() => {
@@ -584,6 +676,7 @@ function CreateInvoice({
   };
 
   const refs = useRef({});
+  const billingDebounce = useRef({});
 
   // Billing code autocomplete options (sample/demo data)
   const billingCodeOptions = [];
@@ -597,6 +690,15 @@ function CreateInvoice({
   });
 
   useEffect(() => {
+    return () => {
+      Object.values(billingDebounce.current || {}).forEach((timer) =>
+        clearTimeout(timer)
+      );
+      billingDebounce.current = {};
+    };
+  }, []);
+
+  useEffect(() => {
     const onKey = (e) => {
       if (!ac.visible) return;
       if (e.key === "Escape") setAc((s) => ({ ...s, visible: false }));
@@ -607,25 +709,77 @@ function CreateInvoice({
 
   const handleAcChange = (id, value) => {
     updateItem(id, "billingCode", value);
-    const q = (value || "").trim().toLowerCase();
-    const list = q
-      ? billingCodeOptions.filter(
-          (o) =>
-            o.code.toLowerCase().includes(q) ||
-            (o.desc && o.desc.toLowerCase().includes(q))
-        )
-      : billingCodeOptions.slice(0, 6);
+    const q = (value || "").trim();
+
+    if (billingDebounce.current[id]) {
+      clearTimeout(billingDebounce.current[id]);
+      billingDebounce.current[id] = null;
+    }
+
+    if (!q || q.length < 2) {
+      const lowered = q.toLowerCase();
+      const list = lowered
+        ? billingCodeOptions.filter(
+            (o) =>
+              o.code.toLowerCase().includes(lowered) ||
+              (o.desc && o.desc.toLowerCase().includes(lowered))
+          )
+        : billingCodeOptions.slice(0, 6);
+      setAc({
+        id,
+        list,
+        index: list.length ? 0 : -1,
+        visible: list.length > 0,
+        query: value,
+      });
+      return;
+    }
+
     setAc({
       id,
-      list,
-      index: list.length ? 0 : -1,
-      visible: list.length > 0,
+      list: [{ code: "__loading", desc: "Searching..." }],
+      index: 0,
+      visible: true,
       query: value,
     });
+
+    billingDebounce.current[id] = setTimeout(async () => {
+      try {
+        const results = await getBillingCodes(q);
+        let list = (results || []).map((it) => ({
+          code: (it?.value ?? it?.code ?? "").toString(),
+          desc:
+            (it?.name ?? it?.description ?? it?.desc ?? "").toString(),
+        }));
+        const seen = new Set();
+        list = list.filter((it) => {
+          const key = `${it.code.toLowerCase()}::${(it.desc || "").toLowerCase()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return Boolean(it.code);
+        });
+        setAc({
+          id,
+          list,
+          index: list.length ? 0 : -1,
+          visible: list.length > 0,
+          query: value,
+        });
+      } catch (err) {
+        console.warn("[CreateInvoice] billing code lookup failed", err);
+        setAc({ id, list: [], index: -1, visible: false, query: value });
+      } finally {
+        billingDebounce.current[id] = null;
+      }
+    }, 300);
   };
 
   const selectAc = (id, opt) => {
     if (!opt) return;
+    if (billingDebounce.current[id]) {
+      clearTimeout(billingDebounce.current[id]);
+      billingDebounce.current[id] = null;
+    }
     updateItem(id, "billingCode", opt.code);
     updateItem(id, "description", opt.desc || "");
     setAc({ id: null, list: [], index: -1, visible: false, query: "" });
@@ -694,6 +848,10 @@ function CreateInvoice({
       }, 0);
 
       const selectedMeta = getSelectedBlMeta();
+      const resolvedCustomerId =
+        coerceNumber(selectedCustomerId) ??
+        coerceNumber(selectedMeta?.customerId) ??
+        0;
       const resolvedTbId = coerceNumber(selectedMeta?.recordId) ?? 161909;
       const resolvedTbName =
         selectedMeta?.tbName ??
@@ -708,7 +866,7 @@ function CreateInvoice({
         branch: userBranch || "",
         tbId: resolvedTbId,
         tbName: resolvedTbName,
-        customerId: selectedCustomerId ?? 0,
+        customerId: resolvedCustomerId,
         postDate: formatDateForAPI(invoicePostDate),
         invoiceDate: formatDateForAPI(invoiceDate),
         dueDate: formatDateForAPI(dueDate),

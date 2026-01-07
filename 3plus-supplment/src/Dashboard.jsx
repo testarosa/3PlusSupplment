@@ -271,7 +271,7 @@ function Dashboard({ onLogout, user: propUser }) {
         <main className="dashboard-main">
           <div className="content-column">
             <Routes location={location}>
-              <Route path="/" element={<section className="panel"><h2>Overview</h2><p>This is a demo dashboard page shown after successful login.</p></section>} />
+              <Route path="/" element={<section className="panel"><h2>Overview</h2><p>3Plus Automation System Site</p></section>} />
               <Route path="/templates" element={<section className="panel"><ListInvoiceTemplate /></section>} />
               <Route path="/templates/create" element={<section className="panel"><CreateInvoiceTemplate onSave={(tpl) => { console.log('Saved template', tpl); alert('Saved (demo)'); navigate('/templates') }} /></section>} />
               <Route path="/templates/edit/:id" element={<section className="panel"><EditWrapper /></section>} />

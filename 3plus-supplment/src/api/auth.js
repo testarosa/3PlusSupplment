@@ -1,11 +1,17 @@
 import axios from 'axios'
+import { API_BASE_URL, buildApiUrl } from './config'
 
-// Simple axios instance; change baseURL as needed or pass full URL to login
-// Use Vite's `import.meta.env` in the browser instead of `process.env`.
-// Guard with `typeof window` so the expression doesn't reference import in unexpected contexts.
-const baseURL = (typeof window !== 'undefined' && import.meta && import.meta.env && import.meta.env.VITE_API_BASE_URL)
-  ? import.meta.env.VITE_API_BASE_URL
-  : ''
+// Shared axios instance pinned to the on-prem API base.
+const baseURL = API_BASE_URL
+
+const buildLoginUrlWithQuery = (username, password) => {
+  
+  if (!username || !password) return null
+  const userParam = encodeURIComponent(username)
+  const passwordParam = encodeURIComponent(password)
+
+  return `${buildApiUrl('/Auth/Login')}?userId=${userParam}&password=${passwordParam}`
+}
 
 const api = axios.create({
   baseURL,
@@ -17,7 +23,8 @@ export async function login({ username, password, url }) {
   // If a full url is provided and contains query params ("?"), perform a GET request
   // allowing backends that expect credentials in the query string.
   // Otherwise default to POST to the given endpoint (or `/api/login`).
-  const endpoint = url || '/api/login'
+  const derivedUrl = buildLoginUrlWithQuery(username, password)
+  const endpoint = url || derivedUrl || '/api/login'
 
   // Full absolute URL (starts with http) -> use axios directly against it
   const isAbsolute = typeof endpoint === 'string' && endpoint.match(/^https?:\/\//i)

@@ -1,8 +1,8 @@
 import axios from 'axios'
+import { buildApiUrl } from './config'
 
 export async function getFreightTypes() {
-  const base = 'http://192.168.20.240:5048'
-  const endpoint = `${base}/api/FreightType`
+  const endpoint = buildApiUrl('/api/FreightType')
   try {
     console.debug('[getFreightTypes] GET', endpoint)
     const resp = await axios.get(endpoint, { headers: { accept: '*/*' } })

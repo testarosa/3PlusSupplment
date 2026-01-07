@@ -17,15 +17,7 @@ export default function Login({ onSuccess } = {}) {
     if (!isValid) return;
 
     try {
-      // Build the external login URL the user provided if needed.
-      // Using the provided example endpoint which expects query params.
-      const externalUrl = `http://192.168.20.240:5048/Auth/Login?userId=${encodeURIComponent(
-        username
-      )}&password=${encodeURIComponent(password)}`;
-
-      const resultAction = await dispatch(
-        login({ username, password, url: externalUrl })
-      );
+      const resultAction = await dispatch(login({ username, password }));
       if (login.fulfilled.match(resultAction)) {
         // login succeeded
         console.log("Logged in:", resultAction.payload);
@@ -124,9 +116,7 @@ export default function Login({ onSuccess } = {}) {
               {error.message || JSON.stringify(error)}
             </div>
           )}
-          <div className="login-meta">
-            Demo app — use your API credentials to log in.
-          </div>
+      
         </form>
       )}
     </div>

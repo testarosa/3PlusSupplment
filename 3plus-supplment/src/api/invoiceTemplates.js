@@ -1,7 +1,8 @@
 import api from "./auth";
+import { buildApiUrl } from "./config";
 
-const TEMPLATE_CREATE_PATH = "/api/InvoiceTemplates";
-const TEMPLATES_PATH = "/api/InvoiceTemplates";
+const TEMPLATE_CREATE_PATH = buildApiUrl("/api/InvoiceTemplates");
+const TEMPLATES_PATH = buildApiUrl("/api/InvoiceTemplates");
 
 const normalizeTemplate = (tpl) => {
   if (!tpl || typeof tpl !== "object") return null;
