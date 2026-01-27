@@ -8,7 +8,6 @@ export async function getBillingCodes(query) {
   );
 
   try {
-    console.debug("[getBillingCodes] GET", endpoint);
     const resp = await axios.get(endpoint, {
       headers: { accept: "text/plain, application/json" },
     });

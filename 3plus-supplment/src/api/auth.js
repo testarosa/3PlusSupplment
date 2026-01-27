@@ -9,7 +9,7 @@ const buildLoginUrlWithQuery = (username, password) => {
   if (!username || !password) return null
   const userParam = encodeURIComponent(username)
   const passwordParam = encodeURIComponent(password)
-
+  
   return `${buildApiUrl('/Auth/Login')}?userId=${userParam}&password=${passwordParam}`
 }
 
@@ -23,6 +23,7 @@ export async function login({ username, password, url }) {
   // If a full url is provided and contains query params ("?"), perform a GET request
   // allowing backends that expect credentials in the query string.
   // Otherwise default to POST to the given endpoint (or `/api/login`).
+
   const derivedUrl = buildLoginUrlWithQuery(username, password)
   const endpoint = url || derivedUrl || '/api/login'
 

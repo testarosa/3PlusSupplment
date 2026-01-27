@@ -21,13 +21,16 @@
   background: #ffffff;
   box-shadow: 0 6px 18px rgba(15,23,42,0.06);
   z-index: 40;
+  height: 48px;
+  max-height: 48px;
 }
 .dashboard-header .header-inner {
   margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.9rem 1.25rem;
+  height: 48px;
+  padding: 0 1rem;
   box-sizing: border-box;
 }
 
@@ -40,13 +43,20 @@
 }
 .brand-area h1 {
   margin: 0;
-  font-size: 1.15rem;
+  font-size: 1rem;
   font-weight: 600;
   letter-spacing: -0.02em;
+  line-height: 1.1;
+  white-space: nowrap;
 }
 .welcome {
   color: #64748b;
-  font-size: 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 240px;
 }
 
 .header-controls {
@@ -60,7 +70,8 @@
   background: linear-gradient(90deg,#ef4444,#ef7373);
   color: white;
   border: none;
-  padding: 0.5rem 0.8rem;
+  height: 32px;
+  padding: 0 0.8rem;
   border-radius: 8px;
   cursor: pointer;
   font-weight: 600;

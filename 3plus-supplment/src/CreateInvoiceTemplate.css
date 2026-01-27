@@ -1,252 +1,568 @@
- .form-actions {
-   display: flex;
-   gap: 1rem;
-   justify-content: flex-end;
- }
-/* Make action buttons (Cancel/Save) the same width for visual consistency */
-.form-actions .remove-btn,
-.form-actions .save-btn {
-  /* fixed width so both buttons align visually */
-  width: 110px;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-}
-.create-template {
-  padding: 1rem;
-}
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
-.create-form {
+.template-builder-page {
+  --ink: #05121f;
+  --muted: #516071;
+  --accent: #0ea5a6;
+  --heat: #ff7d00;
+  --panel: rgba(255, 255, 255, 0.92);
+  --border: rgba(5, 18, 31, 0.08);
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   display: flex;
   flex-direction: column;
+  gap: 1.5rem;
+  color: var(--ink);
+}
+
+.panel {
+  background: var(--panel);
+  border-radius: 24px;
+  border: 1px solid var(--border);
+  padding: 1.75rem;
+  box-shadow: 0 26px 50px rgba(5, 18, 31, 0.08);
+  backdrop-filter: blur(8px);
+  position: relative;
+  overflow: visible;
+}
+
+.builder-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 2rem;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(14, 165, 150, 0.2), transparent 55%),
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 125, 0, 0.22), transparent 60%),
+    linear-gradient(135deg, #fef4eb 0%, #f0fbff 50%, #ebf4ff 100%);
+}
+
+.hero-copy h2 {
+  font-size: 2.25rem;
+  margin: 0.35rem 0 0.75rem;
+}
+
+.hero-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  font-size: 0.7rem;
+  color: var(--accent);
+  margin: 0;
+}
+
+.hero-badges {
+  margin-top: 1.2rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.hero-badges span {
+  border-radius: 999px;
+  border: 1px solid rgba(5, 18, 31, 0.15);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.9rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.hero-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.85rem;
+}
+
+.progress-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.progress-rail li {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  padding: 0.55rem 0.8rem;
+  border-radius: 14px;
+  border: 1px dashed rgba(5, 18, 31, 0.12);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.progress-rail li.complete {
+  border-style: solid;
+  border-color: rgba(14, 165, 150, 0.35);
+  background: rgba(14, 165, 150, 0.08);
+}
+
+.progress-rail p {
+  margin: 0;
+  font-weight: 600;
+}
+
+.progress-rail small {
+  color: var(--muted);
+}
+
+.progress-bullet {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(5, 18, 31, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.progress-rail li.complete .progress-bullet {
+  background: var(--accent);
+  color: white;
+}
+
+.summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
   gap: 1rem;
 }
 
-.field-row {
+.summary-card {
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  padding: 1rem 1.2rem;
+  background: rgba(255, 255, 255, 0.9);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.summary-card.glow {
+  background: linear-gradient(140deg, rgba(255, 125, 0, 0.15), rgba(14, 165, 150, 0.15));
+}
+
+.summary-card p {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-size: 0.75rem;
+  color: var(--muted);
+}
+
+.summary-card h4 {
+  margin: 0.4rem 0 0.2rem;
+  font-size: 1.6rem;
+}
+
+.summary-card small {
+  color: var(--muted);
+}
+
+.status-card {
+  padding: 1rem 1.2rem;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+  border: 1px solid rgba(14, 165, 150, 0.35);
+}
+
+.status-card p {
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.22em;
+  font-size: 0.7rem;
+  color: var(--muted);
+}
+
+.status-card strong {
+  font-size: 1.35rem;
+  display: block;
+  margin: 0.25rem 0;
+}
+
+.status-card small {
+  color: var(--muted);
+}
+
+.status-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.status-meta > div {
+  border-radius: 16px;
+  border: 1px dashed rgba(5, 18, 31, 0.15);
+  padding: 0.85rem 1rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.status-meta p {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.16em;
+  color: var(--muted);
+}
+
+.status-meta strong {
+  font-size: 1.35rem;
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.status-meta small {
+  color: var(--muted);
+}
+
+.template-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.panel-heading h3 {
+  margin: 0.2rem 0 0;
+}
+
+.panel-hint {
+  margin: 0.75rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.status-chip {
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  border: 1px solid rgba(5, 18, 31, 0.2);
+}
+
+.status-chip.ghost {
+  background: transparent;
+  color: var(--ink);
+}
+
+.form-grid {
+  margin-top: 1.25rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.2rem 1.5rem;
+}
+
+.field {
   display: flex;
   flex-direction: column;
   gap: 0.35rem;
 }
 
-.field-row input {
-  padding: 0.5rem;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-}
-
-/* Make the Customer Name input visually larger (about twice the height/size) */
-.customer-input {
-  padding: 1rem; /* larger padding -> taller */
-  font-size: 1.05rem; /* slightly larger text */
-  min-width: 640px; /* wider by default */
-  max-width: 100%;
-  box-sizing: border-box;
-}
-
-.field-row .field-select {
-  padding: 0.5rem;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: #fff;
+.field span,
+.field label {
+  font-weight: 600;
   font-size: 0.95rem;
 }
 
-.items-area {
-  background: #fff;
-  border-radius: 10px;
-  padding: 12px;
-  box-shadow: 0 6px 18px rgba(15,23,42,0.03);
+.field-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
-.items-area h3 { margin: 0 0 0.5rem 0; font-size: 1.05rem }
+.field input,
+.field select {
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  padding: 0.85rem 1rem;
+  font-size: 1rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+}
 
-.items-header {
+.field select {
+  appearance: none;
+}
+
+.field span + .field-hint,
+.field label + .field-hint {
+  margin-top: -0.1rem;
+}
+
+.field.span-2 {
+  grid-column: span 2;
+}
+
+.customer-input-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-/* Column width tweaks: make Qty narrower and Amount wider */
-.items-table th:nth-child(4), .items-table td:nth-child(4) {
-  width: 70px;
-  max-width: 70px;
+  gap: 0.6rem;
 }
-.items-table th:nth-child(5), .items-table td:nth-child(5) {
-  width: 220px;
-  max-width: 220px;
-}
-  gap: 1rem;
-  margin-bottom: 0.75rem;
-}
-.items-header h3 { margin: 0; color: #0f172a }
-.header-add { padding: 0.45rem 0.75rem; border-radius: 8px; font-weight: 700 }
 
-/* Generic autocomplete wrapper for non-table inputs */
-.ac-wrap { position: relative }
-.ac-wrap .ac-list {
+.customer-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.customer-id-chip {
+  border-radius: 999px;
+  padding: 0.35rem 0.8rem;
+  background: rgba(14, 165, 150, 0.1);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.ac-wrap {
+  position: relative;
+}
+
+.ac-list {
   position: absolute;
   top: calc(100% + 6px);
-  left: 0;
-  width: 360px;
-  max-width: calc(100vw - 48px);
-  max-height: 220px;
-  overflow: auto;
-  background: #fff;
-  border: 1px solid rgba(16,24,40,0.08);
-  box-shadow: 0 8px 20px rgba(2,6,23,0.15);
-  border-radius: 8px;
-  padding: 6px 0;
-  z-index: 9999;
-  list-style: none;
-}
-.ac-wrap .ac-list li { padding: 8px 12px; cursor: pointer }
-.ac-wrap .ac-list li.active, .ac-wrap .ac-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
-
-.customer-id { font-size: 0.85rem; color: #334155; background: #f1f5f9; padding: 4px 8px; border-radius: 6px }
-
-.items-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0 6px;
-  /* allow dropdowns to overflow and overlay rows instead of expanding the row height */
-  overflow: visible;
-}
-
-/* Make the last (actions) column a fixed width so subtotal can align under the Amount column */
-.items-table th:last-child,
-.items-table td:last-child {
-  width: 140px;
-  max-width: 140px;
-}
-
-.items-table thead th {
-  text-align: left;
-  padding: 0.6rem 0.8rem;
-  font-weight: 700;
-  font-size: 0.9rem;
-  color: #334155;
-}
-
-.items-table tbody tr {
-  background: #fbfdff;
-  border-radius: 8px;
-}
-
-.items-table td {
-  padding: 0.4rem 0.7rem;
-  vertical-align: middle;
-  border: 0; /* spacing handled by border-spacing */
-}
-
-.items-table input { width: 100%; padding: 0.5rem; border-radius: 8px; border: 1px solid #edf2f7; background: #fff }
-
-.items-table tr:hover { box-shadow: 0 4px 10px rgba(2,6,23,0.04); transform: translateY(-0.5px); }
-
-/* Autocomplete dropdown that flows over other UI elements */
-.billing-cell { position: relative }
-.billing-cell .ac-list {
-  position: absolute;
-  top: calc(100% + 8px);
   left: 0;
   width: 360px;
   max-width: calc(100vw - 48px);
   max-height: 260px;
   overflow: auto;
   background: #fff;
-  border: 1px solid rgba(16,24,40,0.08);
-  box-shadow: 0 10px 26px rgba(2,6,23,0.12);
-  border-radius: 10px;
-  padding: 8px 0;
-  z-index: 9999; /* ensures it flows above other UI */
+  border: 1px solid rgba(5, 18, 31, 0.08);
+  box-shadow: 0 18px 36px rgba(5, 18, 31, 0.15);
+  border-radius: 16px;
+  padding: 6px 0;
+  z-index: 50;
   list-style: none;
 }
-.billing-cell .ac-list li {
+
+/* Billing-code autocomplete is rendered in a portal overlay to avoid scrollbars in the line-items area */
+.ac-list.ac-list-portal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  max-width: none;
+  max-height: 260px;
+  overflow: auto;
+  z-index: 3000;
+}
+
+.ac-list li {
   padding: 10px 14px;
   cursor: pointer;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: #0f172a;
 }
 
-.billing-cell .ac-list li:hover,
-.billing-cell .ac-list li.active {
-  background: linear-gradient(90deg, #eef2ff, #f8fbff);
-  color: #0b3d91;
+.ac-list li.active,
+.ac-list li:hover {
+  background: linear-gradient(120deg, rgba(14, 165, 150, 0.12), rgba(255, 125, 0, 0.12));
 }
 
-.ac-code { font-weight: 600 }
-.ac-desc { font-size: 0.85rem; color: #475569 }
-.add-btn, .remove-btn, .save-btn {
-  padding: 0.45rem 0.7rem;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  font-weight: 700;
+.ac-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
 }
 
-.add-btn { background: linear-gradient(90deg,#06b6d4,#3b82f6); color: white }
-.remove-btn { background: linear-gradient(90deg,#ef4444,#fb7185); color: white; padding: 0.35rem 0.6rem; border-radius: 6px }
-.remove-btn.small { padding: 0.25rem 0.45rem; border-radius: 6px; font-weight: 600 }
-.save-btn { background: linear-gradient(90deg,#10b981,#059669); color: white; font-weight: 800 }
-
-/* visually indicate disabled remove button (when only one row remains) */
-.remove-btn[disabled] {
-  opacity: 0.55;
-  cursor: not-allowed;
-  filter: grayscale(20%);
-}
-
-
-.items-actions { display: flex; align-items: center; gap: 1rem; margin-top: 0.75rem }
-
-.subtotal { margin-left: auto; font-weight: 800; font-size: 1rem }
-
-/* Responsive: allow horizontal scroll on small screens */
-@media (max-width: 720px) {
-  .items-table { display: block; overflow: auto; white-space: nowrap }
-  .items-table thead, .items-table tbody, .items-table tr { display: inline-block; vertical-align: top }
-  .items-table thead { margin-right: 12px }
-}
-/* Responsive: allow Qty/Amount to size down on small screens */
-@media (max-width: 720px) {
-  .items-table th:nth-child(4), .items-table td:nth-child(4),
-  .items-table th:nth-child(5), .items-table td:nth-child(5) {
-    width: auto;
-    max-width: none;
-  }
-}
-
-.right { text-align: right }
-
-.save-error {
-  margin-top: 0.75rem;
-  padding: 0.65rem 0.8rem;
-  border-radius: 8px;
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
+.ac-code {
   font-weight: 600;
 }
 
-/* bottom row that contains subtotal on the left and action buttons on the right */
-.items-area .bottom-row {
+.ac-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.builder-line-items .line-table-wrapper {
+  margin-top: 1rem;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.9);
+  overflow-x: auto;
+}
+
+.items-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  min-width: 680px;
+}
+
+.items-table thead th {
+  text-align: left;
+  padding: 0.75rem 1rem;
+  font-size: 0.85rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.items-table tbody tr {
+  background: #fbfdff;
+  border-radius: 14px;
+  box-shadow: inset 0 0 0 1px rgba(5, 18, 31, 0.04);
+}
+
+.items-table td {
+  padding: 0.6rem 0.9rem;
+  vertical-align: middle;
+}
+
+.items-table input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(5, 18, 31, 0.12);
+  padding: 0.55rem 0.7rem;
+  background: white;
+}
+
+.billing-cell {
+  position: relative;
+}
+
+.billing-cell .ac-list {
+  width: 320px;
+}
+
+.right {
+  text-align: right;
+}
+
+.btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.3rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.btn.primary {
+  background: linear-gradient(120deg, #0ea5a6, #16c79a);
+  color: #fff;
+  box-shadow: 0 12px 30px rgba(14, 165, 150, 0.45);
+}
+
+.btn.outline {
+  border: 1px solid rgba(5, 18, 31, 0.2);
+  background: transparent;
+  color: var(--ink);
+}
+
+.btn.ghost {
+  border: 1px dashed rgba(5, 18, 31, 0.25);
+  background: transparent;
+  color: var(--ink);
+}
+
+.btn.danger {
+  background: linear-gradient(120deg, #ef4444, #fb7185);
+  color: #fff;
+  border-radius: 10px;
+}
+
+.btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.line-footer {
+  margin-top: 1.25rem;
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
-  margin-top: 0.75rem;
+  flex-wrap: wrap;
 }
 
-/* center the invoice action buttons when used in the items area */
-.items-area .form-actions.invoice-actions-centered {
-  justify-content: center;
-  margin-top: 0.75rem;
+.line-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  color: var(--muted);
+  font-weight: 600;
 }
 
-/* right-align subtotal row so it appears under the Amount column */
-.items-area .subtotal-row {
+.line-metrics span {
+  border-radius: 999px;
+  border: 1px solid rgba(5, 18, 31, 0.08);
+  padding: 0.3rem 0.9rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.subtotal-card {
+  border-radius: 16px;
+  padding: 0.85rem 1.25rem;
+  background: linear-gradient(120deg, rgba(255, 125, 0, 0.15), rgba(14, 165, 150, 0.15));
+  border: 1px solid rgba(5, 18, 31, 0.08);
+}
+
+.subtotal-card p {
+  margin: 0;
+  font-size: 0.7rem;
+  color: var(--muted);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.subtotal-card strong {
+  font-size: 1.2rem;
+  display: block;
+}
+
+.action-panel .action-grid {
   display: flex;
   justify-content: flex-end;
-  margin-top: 0.5rem;
-  /* account for the actions column width so subtotal lines up under the Amount column */
-  padding-right: 140px;
+  gap: 0.9rem;
+  flex-wrap: wrap;
+}
+
+.action-panel .action-grid .btn {
+  min-width: 140px;
+  text-align: center;
+}
+
+.save-error {
+  margin-top: 0.85rem;
+  padding: 0.75rem 1rem;
+  border-radius: 12px;
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  font-weight: 600;
+}
+
+@media (max-width: 720px) {
+  .panel {
+    padding: 1.25rem;
+  }
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  .field.span-2 {
+    grid-column: span 1;
+  }
+  .hero-copy h2 {
+    font-size: 1.85rem;
+  }
+  .customer-input-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .customer-id-chip {
+    width: fit-content;
+  }
+  .items-table {
+    min-width: 520px;
+  }
+  .action-panel .action-grid {
+    justify-content: center;
+  }
 }

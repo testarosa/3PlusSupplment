@@ -1,163 +1,636 @@
-.create-invoice-root {
-  padding: 1rem;
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+.create-invoice-page {
+  --ink: #041427;
+  --muted: #536171;
+  --accent: #0ea5a6;
+  --glow: rgba(255, 255, 255, 0.92);
+  --border: rgba(4, 20, 39, 0.08);
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  color: var(--ink);
+  padding: 1.4rem;
+  background: transparent;
+  min-height: auto;
+  max-width: none;
+
 }
 
-.create-invoice-root h2 {
-  margin: 0 0 0.5rem 0;
+.create-invoice-page .panel {
+  background: var(--glow);
+  border-radius: 26px;
+  border: 1px solid var(--border);
+  padding: 0.3rem 1.8rem 2rem;
+  box-shadow: 0 24px 55px rgba(4, 20, 39, 0.08);
+  backdrop-filter: blur(8px);
+  margin-bottom: 0.3rem;
+    background:
+    radial-gradient(130% 120% at 0% 0%, rgba(14, 165, 150, 0.22), transparent 55%),
+    radial-gradient(120% 140% at 100% 0%, rgba(255, 125, 0, 0.2), transparent 55%),
+    linear-gradient(120deg, rgba(255, 255, 255, 0.95), rgba(236, 245, 255, 0.9));
 }
 
-.create-invoice-root p { color: #475569 }
+.create-invoice-page .invoice-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(0, 0.9fr);
+  gap: 2rem;
 
-/* BL selector styles (separate dropdown) */
-.bl-wrap { display: inline-block }
-.bl-btn {
-  padding: 0.45rem 0.65rem;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: #fff;
-  cursor: pointer;
+  align-items: start;
+}
+
+.create-invoice-page .hero-copy,
+.create-invoice-page .hero-status {
+  min-width: 0;
+}
+
+.create-invoice-page .hero-copy h2 {
+  font-size: 2.35rem;
+  margin: 0.35rem 0 0.7rem;
+}
+
+.create-invoice-page .hero-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+  max-width: 68ch;
+}
+
+.create-invoice-page .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.35em;
+  font-size: 0.68rem;
+  color: var(--accent);
+  margin: 0;
+}
+
+.create-invoice-page .hero-badges {
+  margin-top: 1.1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.55rem;
+}
+
+.create-invoice-page .hero-badges span {
+  border-radius: 999px;
+  border: 1px solid rgba(4, 20, 39, 0.12);
+  padding: 0.4rem 0.95rem;
+  background: rgba(255, 255, 255, 0.8);
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.create-invoice-page .hero-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.95rem;
+  width: 100%;
+  max-width: 560px;
+  justify-self: end;
+}
+
+@media (max-width: 1100px) {
+  .create-invoice-page .invoice-hero {
+    grid-template-columns: 1fr;
+  }
+  .create-invoice-page .hero-status {
+    max-width: none;
+    justify-self: stretch;
+  }
+}
+
+.create-invoice-page .status-card {
+  border-radius: 18px;
+  padding: 1rem 1.35rem;
+  border: 1px solid rgba(14, 165, 150, 0.35);
+  background: rgba(255, 255, 255, 0.92);
+}
+
+.create-invoice-page .status-card p {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.create-invoice-page .status-card strong {
+  display: block;
+  font-size: 1.35rem;
+  margin: 0.25rem 0;
+}
+
+.create-invoice-page .status-card small {
+  color: var(--muted);
+}
+
+.create-invoice-page .status-meta {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 0.75rem;
+}
+
+.create-invoice-page .status-meta > div {
+  border-radius: 16px;
+  border: 1px dashed rgba(4, 20, 39, 0.15);
+  padding: 0.8rem 1rem;
+  background: rgba(255, 255, 255, 0.82);
+}
+
+.create-invoice-page .status-meta p {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.create-invoice-page .status-meta strong {
+  font-size: 1.3rem;
+  display: block;
+  margin-top: 0.35rem;
+}
+
+.create-invoice-page .status-meta small {
+  color: var(--muted);
+}
+
+.create-invoice-page .progress-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.create-invoice-page .progress-rail li {
+  display: flex;
+  gap: 0.7rem;
+  align-items: center;
+  border-radius: 16px;
+  border: 1px dashed rgba(4, 20, 39, 0.12);
+  padding: 0.6rem 0.85rem;
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.create-invoice-page .progress-rail li.complete {
+  border-color: rgba(14, 165, 150, 0.4);
+  background: rgba(14, 165, 150, 0.08);
+}
+
+.create-invoice-page .progress-rail p {
+  margin: 0;
   font-weight: 600;
 }
 
-.ac-bl-list {
+.create-invoice-page .progress-rail small {
+  color: var(--muted);
+}
+
+.create-invoice-page .progress-bullet {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(4, 20, 39, 0.1);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+}
+
+.create-invoice-page .progress-rail li.complete .progress-bullet {
+  background: var(--accent);
+  color: white;
+}
+
+.create-invoice-page .summary-strip {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.5rem;
+}
+
+.create-invoice-page .summary-card {
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  padding: 1rem 1.2rem;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
+}
+
+.create-invoice-page .summary-card.glow {
+  background: linear-gradient(140deg, rgba(255, 125, 0, 0.15), rgba(14, 165, 150, 0.15));
+}
+
+.create-invoice-page .summary-card p {
+  margin: 0;
+  font-size: 0.75rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.create-invoice-page .summary-card h4 {
+  margin: 0.35rem 0 0.2rem;
+  font-size: 1.55rem;
+}
+
+.create-invoice-page .summary-card small {
+  color: var(--muted);
+}
+
+.create-invoice-page .panel-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.create-invoice-page .panel-heading h3 {
+  margin: 0 rem;
+}
+
+.create-invoice-page .panel-heading p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.create-invoice-page .btn {
+  border: none;
+  border-radius: 999px;
+  padding: 0.6rem 1.3rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
+}
+
+.create-invoice-page .btn.primary {
+  background: linear-gradient(120deg, #0ea5a6, #16c79a);
+  color: #fff;
+  box-shadow: 0 12px 28px rgba(14, 165, 150, 0.35);
+}
+
+.create-invoice-page .btn.outline {
+  border: 1px solid rgba(4, 20, 39, 0.2);
+  background: transparent;
+  color: var(--ink);
+}
+
+.create-invoice-page .btn.ghost {
+  border: 1px dashed rgba(4, 20, 39, 0.25);
+  background: transparent;
+  color: var(--ink);
+}
+
+.create-invoice-page .btn.danger {
+  background: linear-gradient(120deg, #ef4444, #fb7185);
+  color: #fff;
+  border-radius: 12px;
+}
+
+.create-invoice-page .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.create-invoice-page .btn:hover:not(:disabled) {
+  transform: translateY(-1px);
+}
+
+.create-invoice-page .ref-grid {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1rem 1.25rem;
+}
+
+.create-invoice-page .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  min-width: 0;
+}
+
+.create-invoice-page .field span,
+.create-invoice-page .field label {
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.create-invoice-page .field-hint {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.create-invoice-page .input-control,
+.create-invoice-page .field input,
+.create-invoice-page .field select {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 0.45rem 0.65rem;
+  font-size: 0.92rem;
+  background: rgba(255, 255, 255, 0.95);
+  color: var(--ink);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* React-datepicker wraps inputs; ensure it doesn't overflow grid cells */
+.create-invoice-page .react-datepicker-wrapper,
+.create-invoice-page .react-datepicker__input-container {
+  width: 100%;
+}
+
+.create-invoice-page .field select {
+  appearance: none;
+}
+
+.create-invoice-page .field.span-2 {
+  grid-column: span 2;
+}
+
+.create-invoice-page .ref-input-row {
+  display: flex;
+  gap: 0.75rem;
+  align-items: flex-start;
+}
+
+.create-invoice-page .inline-error {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #b91c1c;
+  font-weight: 600;
+}
+
+.create-invoice-page .header-grid {
+  margin-top: 0.5rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 1.2rem 1.6rem;
+}
+
+.create-invoice-page .customer-field .ac-wrap {
+  position: relative;
+}
+
+.create-invoice-page .customer-id-chip {
+  margin-top: 0.4rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  border-radius: 999px;
+  padding: 0.35rem 0.9rem;
+  background: rgba(14, 165, 150, 0.12);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.create-invoice-page .ac-wrap {
+  position: relative;
+}
+
+.create-invoice-page .ac-list {
   position: absolute;
   top: calc(100% + 8px);
   left: 0;
-  width: 260px;
-  max-height: 220px;
+  width: 360px;
+  max-width: calc(100vw - 48px);
+  max-height: 260px;
   overflow: auto;
   background: #fff;
-  border: 1px solid rgba(16,24,40,0.08);
-  box-shadow: 0 8px 20px rgba(2,6,23,0.12);
-  border-radius: 8px;
+  border: 1px solid rgba(4, 20, 39, 0.08);
+  box-shadow: 0 18px 34px rgba(4, 20, 39, 0.18);
+  border-radius: 16px;
   padding: 6px 0;
-  z-index: 9999;
   list-style: none;
-}
-.ac-bl-list li { padding: 8px 12px; cursor: pointer }
-.ac-bl-list li.active, .ac-bl-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
-
-/* Read-only invoice header row */
-.invoice-readonly-row {
-  display: flex;
-  gap: 0.45rem;
-  margin-top: 0.4rem;
-  flex-wrap: wrap;
-}
-.invoice-readonly-row .field { display: flex; flex-direction: column; min-width: 160px }
-.invoice-readonly-row label { font-size: 0.8rem; color: #475569; margin-bottom: 0.15rem }
-.readonly-input {
-  padding: 0.45rem 0.6rem;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: #f8fafc;
-  color: #0f172a;
-}
-.readonly-input:focus { outline: none; box-shadow: none }
-
-/* Invoice header box */
-.invoice-header-box {
-  border: 1px solid #e6edf3;
-  border-radius: 10px;
-  padding: 12px 14px;
-  background: #ffffff;
-  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.03);
+  z-index: 40;
 }
 
-.invoice-header-box .create-ref-form {
-  display: flex;
-  gap: 0.5rem; /* reduced spacing between controls */
-  align-items: center;
+/* Billing-code autocomplete renders in a portal (fixed overlay) */
+.create-invoice-page .ac-list.ac-list-portal {
+  position: fixed;
+  top: auto;
+  left: auto;
+  max-width: none;
+  z-index: 3000;
 }
 
-/* ensure inner ref area aligns controls with a little space */
-.invoice-header-box .create-ref-form .ref-wrap {
-  display: flex;
-  gap: 0.5rem;
-  align-items: center;
-}
-.invoice-header-box .create-ref-form .ref-input {
-  min-width: 200px;
-}
-
-.invoice-header-box .invoice-readonly-row { margin-top: 8px }
-
-/* Visual separation between header box and line items */
-.invoice-header-box { margin-bottom: 18px }
-.items-area { margin-top: 8px; padding-top: 12px; border-top: 1px solid #eef2f7 }
-
-/* Auto populate invoice number button */
-.auto-pop-btn {
-  padding: 0.4rem 0.6rem;
-  border-radius: 8px;
-  border: none;
-  background: linear-gradient(90deg,#64748b,#0ea5e9);
-  color: #fff;
-  font-weight: 700;
+.create-invoice-page .ac-list li {
+  padding: 10px 14px;
   cursor: pointer;
 }
-.auto-pop-btn:hover { filter: brightness(1.05) }
-.auto-pop-btn:active { transform: translateY(1px) }
 
-/* BL dropdown styling placed next to search */
-.bl-dropdown {
-  padding: 0.45rem 0.6rem;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: #fff;
+.create-invoice-page .ac-list li.active,
+.create-invoice-page .ac-list li:hover {
+  background: linear-gradient(120deg, rgba(14, 165, 150, 0.12), rgba(255, 125, 0, 0.12));
+}
+
+.create-invoice-page .ac-option {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.create-invoice-page .ac-code {
   font-weight: 600;
 }
-.bl-dropdown:disabled { opacity: 0.6; cursor: not-allowed }
 
-/* Apply BL button style */
-.bl-apply-btn {
-  padding: 0.45rem 0.65rem;
-  border-radius: 8px;
-  border: none;
-  background: linear-gradient(90deg,#3b82f6,#06b6d4);
-  color: white;
-  font-weight: 700;
-  cursor: pointer;
-}
-.bl-apply-btn:hover { filter: brightness(1.05) }
-
-/* Styles for the Invoices list search inputs: Customer, Ref # and Invoice # */
-.invoice-search input {
-  padding: 0.45rem 0.6rem;
-  border-radius: 8px;
-  border: 1px solid #e6edf3;
-  background: #fff;
-  min-width: 160px;
-  color: #0f172a;
+.create-invoice-page .ac-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
-.invoice-search input:focus {
-  outline: none;
-  border-color: #60a5fa;
-  box-shadow: 0 0 0 4px rgba(96,165,250,0.06);
+.create-invoice-page .ac-list li.disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
-.invoice-search .search-btn {
-  padding: 0.45rem 0.75rem;
-  border-radius: 8px;
+.create-invoice-page .with-action .input-row {
+  display: flex;
+  gap: 0.65rem;
+  align-items: center;
+  min-width: 0;
 }
 
-/* Autocomplete list for the customer field inside the invoice search */
-.invoice-search .ac-list {
-  position: absolute;
-  top: calc(100% + 6px);
-  left: 0;
-  width: 220px;
-  max-height: 220px;
+.create-invoice-page .with-action .input-row .input-control,
+.create-invoice-page .with-action .input-row input {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.create-invoice-page .line-panel .line-table-wrapper {
+  margin-top: 0.5rem;
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.92);
   overflow: auto;
-  background: #fff;
-  border: 1px solid rgba(16,24,40,0.08);
-  box-shadow: 0 8px 20px rgba(2,6,23,0.12);
-  border-radius: 8px;
-  padding: 6px 0;
-  z-index: 9999;
-  list-style: none;
+  overflow-x: hidden;
+  max-height: min(58vh, 560px);
 }
-.invoice-search .ac-list li { padding: 8px 12px; cursor: pointer }
-.invoice-search .ac-list li.active, .invoice-search .ac-list li:hover { background: linear-gradient(90deg, #eef2ff, #f8fbff); color: #0b3d91 }
+
+/* Keep the last card slightly above the viewport bottom */
+.create-invoice-page .line-panel {
+  margin-bottom: 0.3rem;
+}
+
+.create-invoice-page .line-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0 6px;
+  padding: 0.7rem;
+  min-width: 0;
+  table-layout: fixed;
+}
+
+.create-invoice-page .line-table th,
+.create-invoice-page .line-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.create-invoice-page .line-table thead th {
+  text-align: left;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.96);
+  backdrop-filter: blur(8px);
+  padding: 0.45rem 0.75rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.create-invoice-page .line-table tbody tr {
+  background: #fbfdff;
+  box-shadow: inset 0 0 0 1px rgba(4, 20, 39, 0.05);
+  border-radius: 18px;
+}
+
+.create-invoice-page .line-table td {
+  padding: 0.35rem 0.6rem;
+  vertical-align: middle;
+}
+
+.create-invoice-page .line-table input {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid rgba(4, 20, 39, 0.12);
+  padding: 0.32rem 0.55rem;
+  background: white;
+  font-size: 0.92rem;
+}
+
+.create-invoice-page .billing-cell {
+  position: relative;
+}
+
+.create-invoice-page .billing-cell .ac-list {
+  width: 320px;
+}
+
+.create-invoice-page .right {
+  text-align: right;
+  font-weight: 600;
+}
+
+.create-invoice-page .line-footer {
+  margin-top: 1.2rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.create-invoice-page .line-metrics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* React DatePicker popup should float above the invoice items table */
+.datepicker-popper-portal {
+  z-index: 4000 !important;
+}
+
+.react-datepicker-popper {
+  z-index: 4000 !important;
+}
+
+.create-invoice-page .line-metrics span {
+  border-radius: 999px;
+  border: 1px solid rgba(4, 20, 39, 0.08);
+  padding: 0.3rem 0.85rem;
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.create-invoice-page .subtotal-card {
+  border-radius: 14px;
+  padding: 0.45rem 0.75rem;
+  background: linear-gradient(120deg, rgba(255, 125, 0, 0.16), rgba(14, 165, 150, 0.18));
+  border: 1px solid rgba(4, 20, 39, 0.08);
+}
+
+.create-invoice-page .subtotal-card p {
+  margin: 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.create-invoice-page .subtotal-card strong {
+  font-size: 1.25rem;
+  display: block;
+  line-height: 1.1;
+}
+
+.create-invoice-page .action-row {
+  margin-top: 1.5rem;
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.create-invoice-page .action-row .btn {
+  min-width: 150px;
+  text-align: center;
+}
+
+@media (max-width: 768px) {
+  .create-invoice-page {
+    padding: 1.2rem;
+  }
+  .create-invoice-page .panel {
+    padding: 1.25rem;
+  }
+  .create-invoice-page .hero-copy h2 {
+    font-size: 1.95rem;
+  }
+  .create-invoice-page .summary-strip {
+    grid-template-columns: 1fr;
+  }
+  .create-invoice-page .header-grid,
+  .create-invoice-page .ref-grid {
+    grid-template-columns: 1fr;
+  }
+  .create-invoice-page .field.span-2 {
+    grid-column: span 1;
+  }
+  .create-invoice-page .action-row {
+    justify-content: center;
+  }
+}
 

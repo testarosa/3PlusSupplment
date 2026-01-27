@@ -46,6 +46,7 @@ export async function saveInvoiceTemplate(payload) {
 export async function updateInvoiceTemplate(id, payload) {
   if (!id && id !== 0) throw new Error("Template id is required for update");
   try {
+    console.log("Updating template", TEMPLATES_PATH);
     const res = await api.put(`${TEMPLATES_PATH}/${id}`, payload, {
       headers: { accept: "text/plain", "Content-Type": "application/json" },
     });

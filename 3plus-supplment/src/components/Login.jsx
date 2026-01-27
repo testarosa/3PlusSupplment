@@ -43,8 +43,8 @@ export default function Login({ onSuccess } = {}) {
     }
     if (!password || password.length === 0) {
       errs.password = "Please enter a password.";
-    } else if (password.length < 4) {
-      errs.password = "Password must be at least 4 characters.";
+    } else if (password.length < 3) {
+      errs.password = "Password must be at least 3 characters.";
     }
     setFormErrors(errs);
     return Object.keys(errs).length === 0;

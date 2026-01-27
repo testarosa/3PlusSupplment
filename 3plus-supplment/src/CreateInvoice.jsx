@@ -1,7 +1,7 @@
-import React, { useState, useMemo, useRef, useEffect } from "react";
+import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { useSelector } from "react-redux";
 import "./CreateInvoice.css";
-import "./CreateInvoiceTemplate.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import { fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
@@ -12,6 +12,11 @@ import { selectAuth } from "./store/slices/authSlice";
 
 const TB_NAME_OIM = "T_OIMMAIN";
 const TB_NAME_OIH = "T_OIHMAIN";
+
+const DatePickerPopperContainer = ({ children }) => {
+  if (typeof document === "undefined") return children;
+  return createPortal(children, document.body);
+};
 
 const coerceNumber = (value) => {
   if (value === null || typeof value === "undefined") return null;
@@ -99,6 +104,96 @@ const metaToCustomerOption = (meta) => {
   });
 };
 
+const formatDisplayDate = (value) => {
+  if (!value) return "—";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+};
+
+const extractInvoiceLineItemsFromLookup = (payload) => {
+  if (!payload || typeof payload !== "object") return [];
+
+  const listCandidate =
+    payload.oiRates ??
+    payload.oIRates ??
+    payload.tOIRateDtos ??
+    payload.tOIRateDTOs ??
+    payload.tOIRateMainDtos ??
+    payload.tOIRateMainDTOs ??
+    payload.invoiceRates ??
+    payload.rates ??
+    payload.items ??
+    payload.lineItems ??
+    null;
+
+  const rows = Array.isArray(listCandidate) ? listCandidate : [];
+
+  const normalizeText = (value) =>
+    value != null && typeof value !== "object" ? value.toString().trim() : "";
+
+  const out = [];
+  rows.forEach((row) => {
+    if (!row || typeof row !== "object") return;
+
+    const billingCode = normalizeText(
+      row.billingCode ??
+        row.BillingCode ??
+        row.code ??
+        row.Code ??
+        row.fBillingCode ??
+        row.fBillcode ??
+        row.fBillCode ??
+        row.fCode ??
+        row.fBillingcode
+    );
+
+    const description = normalizeText(
+      row.billingDescription ??
+        row.BillingDescription ??
+        row.description ??
+        row.Description ??
+        row.desc ??
+        row.fDescription ??
+        row.fDesc ??
+        row.fBillingDescription
+    );
+
+    const rate =
+      coerceNumber(
+        row.rate ??
+          row.Rate ??
+          row.fRate ??
+          row.amount ??
+          row.Amount ??
+          row.fAmount ??
+          row.unitPrice ??
+          row.UnitPrice
+      ) ?? 0;
+
+    const qty =
+      coerceNumber(
+        row.qty ??
+          row.Qty ??
+          row.quantity ??
+          row.Quantity ??
+          row.fQty ??
+          row.fQuantity
+      ) ?? 1;
+
+    // Only include rows that have at least something meaningful.
+    if (!billingCode && !description) return;
+
+    out.push({ billingCode, description, rate, qty });
+  });
+
+  return out;
+};
+
 function CreateInvoice({
   initialData = {},
   title = "Create Invoice",
@@ -168,13 +263,16 @@ function CreateInvoice({
     return "";
   });
   const [invoiceNumber, setInvoiceNumber] = useState(
-    initialData?.invoiceNumber ?? ""
+    initialData?.invoiceNo ?? initialData?.invoiceNumber ?? ""
   );
   // Ref/search state (re-added per request)
   const [refSearchTerm, setRefSearchTerm] = useState(initialData?.ref ?? "");
   const [selectedRef, setSelectedRef] = useState(initialData?.ref ?? "");
   const [refLookupError, setRefLookupError] = useState(null);
   const [refSearching, setRefSearching] = useState(false);
+
+  // After a ref lookup, optionally auto-populate invoice items from templates once bill-to is known.
+  const [autoPopulateAfterRef, setAutoPopulateAfterRef] = useState(false);
 
   // Populate BL list on mount: prefer sessionStorage templates -> fallback generated demo BLs
   React.useEffect(() => {
@@ -248,6 +346,29 @@ function CreateInvoice({
     setRefSearchTerm(val);
   };
 
+  const parseCombinedRefInput = (raw) => {
+    const input = (raw || "").toString().trim();
+    if (!input) return { refQuery: "", preferredBl: "" };
+
+    // Accept inputs like: OI-514261-bl-001 (case-insensitive "-bl-")
+    const match = input.match(/^(.*?)-(?:bl)-(.*)$/i);
+    if (!match) return { refQuery: input, preferredBl: "" };
+
+    const refQuery = (match[1] || "").trim();
+    let blSuffix = (match[2] || "").trim();
+    if (!refQuery || !blSuffix) return { refQuery: input, preferredBl: "" };
+
+    // If suffix is numeric, pad to 3 digits (001)
+    if (/^\d+$/.test(blSuffix)) {
+      blSuffix = blSuffix.padStart(3, "0");
+    }
+
+    return {
+      refQuery,
+      preferredBl: `${refQuery}-BL-${blSuffix}`,
+    };
+  };
+
   const formatBillToFromMeta = (meta) => {
     const normalized = metaToCustomerOption(meta);
     return normalized ? optionLabel(normalized) : "";
@@ -295,7 +416,8 @@ function CreateInvoice({
 
   const doRefSearch = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    const query = (refSearchTerm || "").trim();
+    const rawQuery = (refSearchTerm || "").trim();
+    const { refQuery: query, preferredBl: preferredBlFromInput } = parseCombinedRefInput(rawQuery);
     if (!query) {
       setSelectedRef("");
       setSelectedBL("");
@@ -329,6 +451,24 @@ function CreateInvoice({
 
       if (payload && typeof payload === "object" && payload.data) {
         payload = payload.data;
+      }
+
+      // Populate invoice items from the lookup payload when present.
+      const extractedLines = extractInvoiceLineItemsFromLookup(payload);
+      if (extractedLines.length) {
+        setItems(
+          extractedLines.map((line, idx) => ({
+            id: idx + 1,
+            billingCode: line.billingCode || "",
+            description: line.description || "",
+            rate: typeof line.rate !== "undefined" ? line.rate : 0,
+            qty: typeof line.qty !== "undefined" ? line.qty : 1,
+          }))
+        );
+        setAutoPopulateAfterRef(false);
+      } else {
+        // Keep UI usable while we possibly auto-populate from templates.
+        setItems([{ id: 1, billingCode: "", description: "", rate: 0, qty: 1 }]);
       }
 
       const mbl = (payload?.tOIMMainDto?.fMblno || "").toString().trim();
@@ -434,13 +574,46 @@ function CreateInvoice({
       combinedList.push(...hblNumbers.map((entry) => entry.number));
 
       if (combinedList.length) {
+        const defaultPreferred = (hblNumbers[0]?.number || "").toString().trim() || mbl || combinedList[0];
+        const preferredBl = preferredBlFromInput && combinedList.includes(preferredBlFromInput)
+          ? preferredBlFromInput
+          : defaultPreferred;
+
         setAcBL({
           list: combinedList,
           index: combinedList.length ? 0 : -1,
           visible: false,
         });
         setBlMeta(metaMap);
-        setSelectedBL("");
+
+        // Auto-select the first HBL (preferred) to drive header population.
+        setSelectedBL(preferredBl);
+
+        // Populate header immediately (don't rely only on async blMeta state).
+        const metaOverride = metaMap?.[preferredBl];
+        if (metaOverride) {
+          const normalizedMeta = metaToCustomerOption(metaOverride);
+          const combined = normalizedMeta
+            ? optionLabel(normalizedMeta)
+            : formatBillToFromMeta(metaOverride);
+          if (combined) setBillTo(combined);
+
+          const normalizedId = normalizedMeta
+            ? coerceNumber(normalizedMeta.id) ?? coerceNumber(normalizedMeta.value)
+            : null;
+          const derivedCustomerId =
+            typeof normalizedId === "number"
+              ? normalizedId
+              : coerceNumber(metaOverride.customerId);
+          setSelectedCustomerId(
+            typeof derivedCustomerId === "number" ? derivedCustomerId : null
+          );
+        }
+
+        // If lookup payload didn't include line items, try to auto-populate from templates.
+        if (!extractedLines.length) {
+          setAutoPopulateAfterRef(true);
+        }
         return;
       }
 
@@ -675,11 +848,38 @@ function CreateInvoice({
     );
   };
 
+  useEffect(() => {
+    if (!autoPopulateAfterRef) return;
+    if (refSearching) return;
+    const normalizedBillTo = (billTo || "").trim();
+    if (!normalizedBillTo) return;
+
+    const hasMeaningfulLines = (items || []).some((it) => {
+      if (!it) return false;
+      const code = (it.billingCode || "").toString().trim();
+      const desc = (it.description || "").toString().trim();
+      const rate = Number(it.rate) || 0;
+      // qty defaults to 1 in the blank line; don't use it to decide if lines are populated.
+      return Boolean(code || desc || rate > 0);
+    });
+
+    // If something already populated the lines, don't overwrite.
+    if (hasMeaningfulLines) {
+      setAutoPopulateAfterRef(false);
+      return;
+    }
+
+    setAutoPopulateAfterRef(false);
+    // Populate terms + items from templates.
+    handleAutoPopulate();
+  }, [autoPopulateAfterRef, billTo, items, refSearching]);
+
   const refs = useRef({});
   const billingDebounce = useRef({});
 
-  // Billing code autocomplete options (sample/demo data)
-  const billingCodeOptions = [];
+  // Billing code autocomplete cache (used for quick suggestions when query is short)
+  const [billingCodeOptions, setBillingCodeOptions] = useState([]);
+  const [billingCodeBootstrapped, setBillingCodeBootstrapped] = useState(false);
 
   const [ac, setAc] = useState({
     id: null,
@@ -688,6 +888,134 @@ function CreateInvoice({
     visible: false,
     query: "",
   });
+
+  const [billingAcStyle, setBillingAcStyle] = useState(null);
+  const [billToAcStyle, setBillToAcStyle] = useState(null);
+
+  const updateBillingAcStyle = useCallback(() => {
+    const id = ac?.id;
+    if (!id) return;
+    const node = refs.current?.[id]?.billingCode;
+    if (!node) return;
+
+    const rect = node.getBoundingClientRect();
+    const margin = 12;
+    const preferredWidth = 360;
+
+    let width = Math.min(preferredWidth, window.innerWidth - margin * 2);
+    width = Math.max(260, width);
+
+    let left = rect.left;
+    if (left + width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - width);
+    }
+
+    const top = rect.bottom + 6;
+    const maxHeight = Math.max(120, Math.min(260, window.innerHeight - top - margin));
+
+    setBillingAcStyle({
+      position: "fixed",
+      top,
+      left,
+      width,
+      maxHeight,
+      zIndex: 3000,
+    });
+  }, [ac?.id]);
+
+  useEffect(() => {
+    if (!ac.visible || !ac.id) return;
+    updateBillingAcStyle();
+
+    const handle = () => updateBillingAcStyle();
+    window.addEventListener("scroll", handle, true);
+    window.addEventListener("resize", handle);
+    return () => {
+      window.removeEventListener("scroll", handle, true);
+      window.removeEventListener("resize", handle);
+    };
+  }, [ac.visible, ac.id, updateBillingAcStyle]);
+
+  const updateBillToAcStyle = useCallback(() => {
+    const node = refs.current?.billTo;
+    if (!node) return;
+
+    const rect = node.getBoundingClientRect();
+    const margin = 12;
+    const preferredWidth = 420;
+
+    let width = Math.min(preferredWidth, window.innerWidth - margin * 2);
+    width = Math.max(260, width);
+
+    let left = rect.left;
+    if (left + width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - width);
+    }
+
+    const top = rect.bottom + 8;
+    const maxHeight = Math.max(140, Math.min(260, window.innerHeight - top - margin));
+
+    setBillToAcStyle({
+      position: "fixed",
+      top,
+      left,
+      width,
+      maxHeight,
+      zIndex: 3000,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!acBill.visible) return;
+    updateBillToAcStyle();
+
+    const handle = () => updateBillToAcStyle();
+    window.addEventListener("scroll", handle, true);
+    window.addEventListener("resize", handle);
+    return () => {
+      window.removeEventListener("scroll", handle, true);
+      window.removeEventListener("resize", handle);
+    };
+  }, [acBill.visible, updateBillToAcStyle]);
+
+  useEffect(() => {
+    let alive = true;
+
+    const normalizeCodes = (results) => {
+      let list = (results || []).map((it) => ({
+        code: (it?.value ?? it?.code ?? "").toString().trim(),
+        desc: (it?.name ?? it?.description ?? it?.desc ?? "").toString().trim(),
+      }));
+      const seen = new Set();
+      list = list.filter((item) => {
+        if (!item.code) return false;
+        const key = `${item.code.toLowerCase()}::${(item.desc || "").toLowerCase()}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+      // Cap list size; dropdown can scroll.
+      return list.slice(0, 50);
+    };
+
+    // Best-effort preload so autocomplete can show something immediately.
+    (async () => {
+      try {
+        const results = await getBillingCodes("");
+        if (!alive) return;
+        const normalized = normalizeCodes(results);
+        setBillingCodeOptions(normalized);
+      } catch (err) {
+        // ignore preload failures; live search will still work.
+      } finally {
+        if (alive) setBillingCodeBootstrapped(true);
+      }
+    })();
+
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -716,15 +1044,8 @@ function CreateInvoice({
       billingDebounce.current[id] = null;
     }
 
-    if (!q || q.length < 2) {
-      const lowered = q.toLowerCase();
-      const list = lowered
-        ? billingCodeOptions.filter(
-            (o) =>
-              o.code.toLowerCase().includes(lowered) ||
-              (o.desc && o.desc.toLowerCase().includes(lowered))
-          )
-        : billingCodeOptions.slice(0, 6);
+    if (!q) {
+      const list = billingCodeOptions.slice(0, 6);
       setAc({
         id,
         list,
@@ -735,9 +1056,33 @@ function CreateInvoice({
       return;
     }
 
+    if (q.length < 2) {
+      const lowered = q.toLowerCase();
+      const list = lowered
+        ? billingCodeOptions.filter(
+            (o) =>
+              o.code.toLowerCase().includes(lowered) ||
+              (o.desc && o.desc.toLowerCase().includes(lowered))
+          )
+        : billingCodeOptions.slice(0, 6);
+
+      // If cache has results, show them. Otherwise fall through to API search
+      // even for 1-character queries.
+      if (list.length) {
+        setAc({
+          id,
+          list,
+          index: list.length ? 0 : -1,
+          visible: list.length > 0,
+          query: value,
+        });
+        return;
+      }
+    }
+
     setAc({
       id,
-      list: [{ code: "__loading", desc: "Searching..." }],
+      list: [{ code: "__loading", desc: "Searching...", disabled: true }],
       index: 0,
       visible: true,
       query: value,
@@ -747,9 +1092,8 @@ function CreateInvoice({
       try {
         const results = await getBillingCodes(q);
         let list = (results || []).map((it) => ({
-          code: (it?.value ?? it?.code ?? "").toString(),
-          desc:
-            (it?.name ?? it?.description ?? it?.desc ?? "").toString(),
+          code: (it?.value ?? it?.code ?? "").toString().trim(),
+          desc: (it?.name ?? it?.description ?? it?.desc ?? "").toString().trim(),
         }));
         const seen = new Set();
         list = list.filter((it) => {
@@ -758,11 +1102,17 @@ function CreateInvoice({
           seen.add(key);
           return Boolean(it.code);
         });
+
+        list = list.slice(0, 50);
+
+        if (!list.length) {
+          list = [{ code: "__empty", desc: "No matching billing codes", disabled: true }];
+        }
         setAc({
           id,
           list,
           index: list.length ? 0 : -1,
-          visible: list.length > 0,
+          visible: true,
           query: value,
         });
       } catch (err) {
@@ -776,6 +1126,7 @@ function CreateInvoice({
 
   const selectAc = (id, opt) => {
     if (!opt) return;
+    if (opt.disabled || opt.code === "__loading" || opt.code === "__empty") return;
     if (billingDebounce.current[id]) {
       clearTimeout(billingDebounce.current[id]);
       billingDebounce.current[id] = null;
@@ -813,6 +1164,62 @@ function CreateInvoice({
   const subtotal = useMemo(
     () => items.reduce((s, it) => s + itemAmount(it), 0),
     [items]
+  );
+
+  const lineStats = useMemo(() => {
+    const ready = items.filter((it) => it.billingCode && it.description).length;
+    const zeroTotals = items.filter((it) => itemAmount(it) <= 0).length;
+    return {
+      total: items.length,
+      ready,
+      pending: Math.max(items.length - ready, 0),
+      zeroTotals,
+    };
+  }, [items]);
+
+  const avgLineAmount = useMemo(
+    () => (lineStats.total ? subtotal / lineStats.total : 0),
+    [lineStats.total, subtotal]
+  );
+
+  const readiness = useMemo(
+    () => ({
+      reference: Boolean((selectedRef || refSearchTerm || "").trim()),
+      customer: Boolean((billTo || "").trim() && selectedCustomerId),
+      schedule: Boolean(invoicePostDate && invoiceDate && dueDate),
+      lines: lineStats.total > 0 && lineStats.ready === lineStats.total,
+    }),
+    [selectedRef, refSearchTerm, billTo, selectedCustomerId, invoicePostDate, invoiceDate, dueDate, lineStats.total, lineStats.ready]
+  );
+
+  const progressSteps = useMemo(
+    () => [
+      {
+        label: "Reference search",
+        complete: readiness.reference,
+        detail: readiness.reference
+          ? selectedRef || refSearchTerm
+          : "Search reference to load BLs",
+      },
+      {
+        label: "Bill-to selection",
+        complete: readiness.customer,
+        detail: readiness.customer ? billTo || "Customer selected" : "Pick customer",
+      },
+      {
+        label: "Schedule & terms",
+        complete: readiness.schedule,
+        detail: readiness.schedule
+          ? `${netTerm || 0}-day • ${formatDisplayDate(dueDate)}`
+          : "Set invoice dates",
+      },
+      {
+        label: "Line validation",
+        complete: readiness.lines,
+        detail: `${lineStats.ready}/${lineStats.total || 0} ready`,
+      },
+    ],
+    [readiness, selectedRef, refSearchTerm, billTo, netTerm, dueDate, lineStats.ready, lineStats.total]
   );
 
   const getSelectedBlMeta = () => {
@@ -866,6 +1273,7 @@ function CreateInvoice({
         branch: userBranch || "",
         tbId: resolvedTbId,
         tbName: resolvedTbName,
+        invoiceNo: (invoiceNumber || "").toString().trim(),
         customerId: resolvedCustomerId,
         postDate: formatDateForAPI(invoicePostDate),
         invoiceDate: formatDateForAPI(invoiceDate),
@@ -914,128 +1322,128 @@ function CreateInvoice({
   };
 
   return (
-    <div className="create-invoice-root">
-      <h2>{title}</h2>
+    <div className="create-invoice-page">
+      <section className="panel invoice-hero">
+        <div className="hero-copy">
+          <p className="eyebrow">Invoice studio</p>
+          <h3>{title}</h3>
+        </div>
+      </section>
 
-      <div style={{ marginTop: "1rem" }}>
-        <div className="invoice-header-box">
-          <form onSubmit={doRefSearch} className="create-ref-form">
-            <div className="field" style={{ width: "100%" }}>
-              <label>Reference Number</label>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "0.65rem",
-                  alignItems: "flex-start",
-                  width: "100%",
-                }}
-              >
-                <div className="ac-wrap ref-wrap" style={{ flex: 1 }}>
-                  <input
-                    className="ref-input"
-                    placeholder="Reference number"
-                    value={refSearchTerm}
-                    onChange={(e) => handleRefChange(e.target.value)}
-                  />
-                </div>
-
-                <button
-                  className="search-btn ref-search-btn"
-                  type="submit"
-                  disabled={refSearching}
-                >
-                  {refSearching ? "Searching..." : "Search"}
-                </button>
-              </div>
-
-              <div style={{ marginTop: "0.75rem" }}>
-                <select
-                  className="bl-dropdown"
-                  value={selectedBL || ""}
-                  onChange={(e) => setSelectedBL(e.target.value)}
-                  aria-label="Select BL"
-                  style={{ width: "100%" }}
-                >
-                  <option value="">Select BL</option>
-                  {acBL.list.map((b) => (
-                    <option key={b} value={b}>
-                      {b}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              {refLookupError && (
-                <div className="error-row" style={{ marginTop: "0.5rem" }}>
-                  {refLookupError}
-                </div>
-              )}
+      <section className="panel ref-panel">
+        <header className="panel-heading">
+          <div>
+            <h3>Reference & BL lookup</h3>
+          </div>
+        </header>
+        <form className="ref-grid" onSubmit={doRefSearch} autoComplete="off">
+          <label className="field span-2">
+            <span>Reference number</span>
+            <div className="ref-input-row">
+              <input
+                className="input-control"
+                placeholder="Search by reference"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={refSearchTerm}
+                onChange={(e) => handleRefChange(e.target.value)}
+              />
+              <button className="btn primary" type="submit" disabled={refSearching}>
+                {refSearching ? "Searching…" : "Search"}
+              </button>
             </div>
-          </form>
-          {/* Editable invoice header row */}
-          <div className="invoice-readonly-row" style={{ marginTop: "1rem" }}>
-            <div className="field">
-              <label>Bill To</label>
-              <div
-                className="ac-wrap bill-wrap"
-                style={{ position: "relative" }}
-              >
-                <input
-                  className="readonly-input"
-                  placeholder="Bill To"
-                  value={billTo}
-                  onChange={(e) => handleBillChange(e.target.value)}
-                  onFocus={() => {
-                    if (!acBill.visible && customerOptions.length) {
+          </label>
+          <label className="field">
+            <span>BL number</span>
+            <select
+              className="input-control"
+              value={selectedBL || ""}
+              onChange={(e) => setSelectedBL(e.target.value)}
+            >
+              <option value="">Select BL</option>
+              {acBL.list.map((b) => (
+                <option key={b} value={b}>
+                  {b}
+                </option>
+              ))}
+            </select>
+          </label>
+        </form>
+        {refLookupError && <div className="inline-error">{refLookupError}</div>}
+      </section>
+      <section className="panel header-panel">
+        <header className="panel-heading">
+          <div>
+            <h3>Invoice header</h3>
+          </div>
+        </header>
+        <div className="header-grid">
+          <div className="field span-2 customer-field">
+            <label>Bill To</label>
+            <div className="ac-wrap">
+              <input
+                className="input-control"
+                placeholder="Customer name"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                value={billTo}
+                onChange={(e) => handleBillChange(e.target.value)}
+                ref={(el) => {
+                  refs.current.billTo = el;
+                }}
+                onFocus={() => {
+                  if (!acBill.visible && customerOptions.length) {
+                    setAcBill((s) => ({
+                      ...s,
+                      list: customerOptions.slice(0, 6),
+                      index: customerOptions.length ? 0 : -1,
+                      visible: true,
+                    }));
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (acBill.visible) {
+                    if (e.key === "ArrowDown") {
+                      e.preventDefault();
                       setAcBill((s) => ({
                         ...s,
-                        list: customerOptions.slice(0, 6),
-                        index: customerOptions.length ? 0 : -1,
-                        visible: true,
+                        index: Math.min(s.index + 1, s.list.length - 1),
                       }));
+                    } else if (e.key === "ArrowUp") {
+                      e.preventDefault();
+                      setAcBill((s) => ({
+                        ...s,
+                        index: Math.max(s.index - 1, 0),
+                      }));
+                    } else if (e.key === "Enter") {
+                      e.preventDefault();
+                      const sel = acBill.list[acBill.index];
+                      if (sel && sel.value !== "__loading") selectBill(sel);
                     }
-                  }}
-                  onKeyDown={(e) => {
-                    if (acBill.visible) {
-                      if (e.key === "ArrowDown") {
-                        e.preventDefault();
-                        setAcBill((s) => ({
-                          ...s,
-                          index: Math.min(s.index + 1, s.list.length - 1),
-                        }));
-                      } else if (e.key === "ArrowUp") {
-                        e.preventDefault();
-                        setAcBill((s) => ({
-                          ...s,
-                          index: Math.max(s.index - 1, 0),
-                        }));
-                      } else if (e.key === "Enter") {
-                        e.preventDefault();
-                        const sel = acBill.list[acBill.index];
-                        if (sel && sel.value !== "__loading") selectBill(sel);
-                      }
-                    }
-                  }}
-                  onBlur={() =>
-                    setTimeout(
-                      () => setAcBill((s) => ({ ...s, visible: false })),
-                      120
-                    )
                   }
-                />
-
-                {acBill.visible && (
+                }}
+                onBlur={() =>
+                  setTimeout(() => setAcBill((s) => ({ ...s, visible: false })), 120)
+                }
+              />
+              {selectedCustomerId && (
+                <span className="customer-id-chip">ID #{selectedCustomerId}</span>
+              )}
+              {acBill.visible && typeof document !== "undefined" &&
+                createPortal(
                   <ul
-                    className="ac-list"
+                    className="ac-list ac-list-portal"
                     role="listbox"
-                    style={{ top: "calc(100% + 6px)" }}
+                    style={billToAcStyle || undefined}
                   >
                     {acBill.list.map((opt, idx) => {
                       const label = optionLabel(opt) || "Unnamed";
                       const key = `${opt?.value || label}-${idx}`;
-                      const disabled = Boolean(
-                        opt?.disabled || opt?.value === "__loading"
-                      );
+                      const disabled = Boolean(opt?.disabled || opt?.value === "__loading");
                       return (
                         <li
                           key={key}
@@ -1055,262 +1463,298 @@ function CreateInvoice({
                         </li>
                       );
                     })}
-                  </ul>
+                  </ul>,
+                  document.body
                 )}
-              </div>
-              <button
-                type="button"
-                className="auto-pop-btn"
-                style={{ marginTop: "0.5rem" }}
-                onClick={handleAutoPopulate}
-                title="Auto populate invoice number"
-              >
-                Auto Populate
-              </button>
-            </div>
-
-            <div className="field">
-              <label>Invoice Post Date</label>
-              <DatePicker
-                className="readonly-input"
-                selected={invoicePostDate}
-                onChange={(d) => setInvoicePostDate(d)}
-                dateFormat="yyyy-MM-dd"
-              />
-            </div>
-
-            <div className="field">
-              <label>Invoice Date</label>
-              <DatePicker
-                className="readonly-input"
-                selected={invoiceDate}
-                onChange={(d) => setInvoiceDate(d)}
-                dateFormat="yyyy-MM-dd"
-              />
-            </div>
-
-            <div className="field">
-              <label>Term (days)</label>
-              <input
-                type="number"
-                className="readonly-input"
-                value={netTerm}
-                min={0}
-                onChange={(e) => {
-                  const raw = e.target.value;
-                  if (raw === "") {
-                    setNetTerm("");
-                    setDueDate(null);
-                    return;
-                  }
-                  const value = Number(raw);
-                  if (Number.isNaN(value)) return;
-                  setNetTerm(value);
-                  const baseDate =
-                    invoiceDate instanceof Date
-                      ? invoiceDate
-                      : new Date(invoiceDate || Date.now());
-                  const due = new Date(baseDate);
-                  due.setDate(due.getDate() + value);
-                  setDueDate(due);
-                }}
-              />
-            </div>
-
-            <div className="field">
-              <label>Due Date</label>
-              <DatePicker
-                className="readonly-input"
-                selected={dueDate}
-                onChange={(d) => setDueDate(d)}
-                dateFormat="yyyy-MM-dd"
-              />
-            </div>
-
-            <div className="field">
-              <label>Invoice Number</label>
-              <input
-                className="readonly-input"
-                readOnly
-                value={invoiceNumber}
-              />
             </div>
           </div>
-          {/* Line items area (copied from CreateInvoiceTemplate) */}
-          <div className="items-area" style={{ marginTop: "1rem" }}>
-            <div className="items-header">
-              <h3>Line Items</h3>
+
+          <div className="field">
+            <label>Invoice Post Date</label>
+            <DatePicker
+              className="input-control"
+              selected={invoicePostDate}
+              onChange={(d) => setInvoicePostDate(d)}
+              dateFormat="yyyy-MM-dd"
+              popperContainer={DatePickerPopperContainer}
+              popperClassName="datepicker-popper-portal"
+            />
+          </div>
+
+          <div className="field">
+            <label>Invoice Date</label>
+            <DatePicker
+              className="input-control"
+              selected={invoiceDate}
+              onChange={(d) => setInvoiceDate(d)}
+              dateFormat="yyyy-MM-dd"
+              popperContainer={DatePickerPopperContainer}
+              popperClassName="datepicker-popper-portal"
+            />
+          </div>
+
+          <div className="field">
+            <label>Term (days)</label>
+            <input
+              type="number"
+              className="input-control"
+              value={netTerm}
+              min={0}
+              onChange={(e) => {
+                const raw = e.target.value;
+                if (raw === "") {
+                  setNetTerm("");
+                  setDueDate(null);
+                  return;
+                }
+                const value = Number(raw);
+                if (Number.isNaN(value)) return;
+                setNetTerm(value);
+                const baseDate =
+                  invoiceDate instanceof Date
+                    ? invoiceDate
+                    : new Date(invoiceDate || Date.now());
+                const due = new Date(baseDate);
+                due.setDate(due.getDate() + value);
+                setDueDate(due);
+              }}
+            />
+          </div>
+
+          <div className="field">
+            <label>Due Date</label>
+            <DatePicker
+              className="input-control"
+              selected={dueDate}
+              onChange={(d) => setDueDate(d)}
+              dateFormat="yyyy-MM-dd"
+              popperContainer={DatePickerPopperContainer}
+              popperClassName="datepicker-popper-portal"
+            />
+          </div>
+
+          <div className="field with-action">
+            <label>Invoice Number</label>
+            <div className="input-row">
+              <input
+                className="input-control"
+                type="text"
+                inputMode="numeric"
+                autoComplete="new-password"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck={false}
+                placeholder="Enter invoice #"
+                value={invoiceNumber}
+                onChange={(e) => setInvoiceNumber(e.target.value)}
+              />
+              <button
+                type="button"
+                className="btn ghost"
+                onClick={handleAutoPopulate}
+                title="Auto populate line items from template"
+              >
+                Auto
+              </button>
             </div>
+          </div>
+        </div>
+      </section>
 
-            <table className="items-table">
-              <thead>
-                <tr>
-                  <th>Billing Code</th>
-                  <th>Description</th>
-                  <th>Rate</th>
-                  <th>Qty</th>
-                  <th>Amount</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((it) => (
-                  <tr key={it.id}>
-                    <td className="billing-cell">
-                      <input
-                        value={it.billingCode}
-                        onChange={(e) => handleAcChange(it.id, e.target.value)}
-                        onKeyDown={(e) => {
-                          if (ac.visible && ac.id === it.id) {
-                            if (e.key === "ArrowDown") {
-                              e.preventDefault();
-                              setAc((s) => ({
-                                ...s,
-                                index: Math.min(s.index + 1, s.list.length - 1),
-                              }));
-                            } else if (e.key === "ArrowUp") {
-                              e.preventDefault();
-                              setAc((s) => ({
-                                ...s,
-                                index: Math.max(s.index - 1, 0),
-                              }));
-                            } else if (e.key === "Enter") {
-                              e.preventDefault();
-                              const sel = ac.list[ac.index];
-                              if (sel) selectAc(it.id, sel);
-                            }
-                          }
-                        }}
-                        onBlur={() =>
-                          setTimeout(
-                            () => setAc((s) => ({ ...s, visible: false })),
-                            150
-                          )
+      <section className="panel line-panel">
+        <header className="panel-heading">
+          <div>
+            <h3>Invoice Items</h3>
+          </div>
+
+        </header>
+        <div className="line-table-wrapper">
+          <table className="line-table">
+            <thead>
+              <tr>
+                <th>Billing Code</th>
+                <th>Description</th>
+                <th>Rate</th>
+                <th>Qty</th>
+                <th>Amount</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((it) => (
+                <tr key={it.id}>
+                  <td className="billing-cell">
+                    <input
+                      value={it.billingCode}
+                      onChange={(e) => handleAcChange(it.id, e.target.value)}
+                      onFocus={() => {
+                        // show cached suggestions quickly; if cache isn't ready yet, show loading
+                        if (ac.visible && ac.id === it.id) return;
+                        if (billingCodeOptions.length) {
+                          const list = billingCodeOptions.slice(0, 6);
+                          setAc({
+                            id: it.id,
+                            list,
+                            index: list.length ? 0 : -1,
+                            visible: list.length > 0,
+                            query: it.billingCode,
+                          });
+                          return;
                         }
-                        ref={(el) => {
-                          refs.current[it.id] = refs.current[it.id] || {};
-                          refs.current[it.id].billingCode = el;
-                        }}
-                      />
 
-                      {ac.visible && ac.id === it.id && (
-                        <ul className="ac-list" role="listbox">
+                        if (!billingCodeBootstrapped) {
+                          setAc({
+                            id: it.id,
+                            list: [{ code: "__loading", desc: "Loading...", disabled: true }],
+                            index: 0,
+                            visible: true,
+                            query: it.billingCode,
+                          });
+                        }
+                      }}
+                      onKeyDown={(e) => {
+                        if (ac.visible && ac.id === it.id) {
+                          if (e.key === "ArrowDown") {
+                            e.preventDefault();
+                            setAc((s) => ({
+                              ...s,
+                              index: Math.min(s.index + 1, s.list.length - 1),
+                            }));
+                          } else if (e.key === "ArrowUp") {
+                            e.preventDefault();
+                            setAc((s) => ({
+                              ...s,
+                              index: Math.max(s.index - 1, 0),
+                            }));
+                          } else if (e.key === "Enter") {
+                            e.preventDefault();
+                            const sel = ac.list[ac.index];
+                            if (sel) selectAc(it.id, sel);
+                          }
+                        }
+                      }}
+                      onBlur={() =>
+                        setTimeout(() => setAc((s) => ({ ...s, visible: false })), 150)
+                      }
+                      ref={(el) => {
+                        refs.current[it.id] = refs.current[it.id] || {};
+                        refs.current[it.id].billingCode = el;
+                      }}
+                    />
+
+                    {ac.visible && ac.id === it.id && typeof document !== "undefined" &&
+                      createPortal(
+                        <ul
+                          className="ac-list ac-list-portal"
+                          role="listbox"
+                          style={billingAcStyle || undefined}
+                        >
                           {ac.list.map((opt, idx) => (
                             <li
-                              key={opt.code}
-                              className={idx === ac.index ? "active" : ""}
+                              key={`${opt.code}-${idx}`}
+                              className={`${idx === ac.index ? "active" : ""} ${opt.disabled ? "disabled" : ""}`.trim()}
                               onMouseDown={(ev) => {
+                                if (opt.disabled) return;
                                 ev.preventDefault();
                                 selectAc(it.id, opt);
                               }}
                               role="option"
                               aria-selected={idx === ac.index}
+                              aria-disabled={Boolean(opt.disabled)}
                             >
-                              <div className="ac-code">{opt.code}</div>
-                              {opt.desc && (
-                                <div className="ac-desc">{opt.desc}</div>
-                              )}
+                              <div className="ac-option">
+                                <div className="ac-code">{opt.code}</div>
+                                {opt.desc && <div className="ac-desc">{opt.desc}</div>}
+                              </div>
                             </li>
                           ))}
-                        </ul>
+                        </ul>,
+                        document.body
                       )}
-                    </td>
-                    <td>
-                      <input
-                        value={it.description}
-                        onChange={(e) =>
-                          updateItem(it.id, "description", e.target.value)
-                        }
-                        ref={(el) => {
-                          refs.current[it.id] = refs.current[it.id] || {};
-                          refs.current[it.id].description = el;
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={it.rate}
-                        onChange={(e) =>
-                          updateItem(it.id, "rate", e.target.value)
-                        }
-                        ref={(el) => {
-                          refs.current[it.id] = refs.current[it.id] || {};
-                          refs.current[it.id].rate = el;
-                        }}
-                      />
-                    </td>
-                    <td>
-                      <input
-                        type="number"
-                        value={it.qty}
-                        onChange={(e) =>
-                          updateItem(it.id, "qty", e.target.value)
-                        }
-                        onKeyDown={(e) => {
-                          if (e.key === "Tab" && !e.shiftKey) {
-                            const last = items[items.length - 1];
-                            if (last && last.id === it.id) {
-                              e.preventDefault();
-                              const newId = addItem();
-                              setTimeout(() => {
-                                const node = refs.current?.[newId]?.billingCode;
-                                if (node && typeof node.focus === "function")
-                                  node.focus();
-                              }, 0);
-                            }
+                  </td>
+                  <td>
+                    <input
+                      value={it.description}
+                      onChange={(e) => updateItem(it.id, "description", e.target.value)}
+                      ref={(el) => {
+                        refs.current[it.id] = refs.current[it.id] || {};
+                        refs.current[it.id].description = el;
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={it.rate}
+                      onChange={(e) => updateItem(it.id, "rate", e.target.value)}
+                      ref={(el) => {
+                        refs.current[it.id] = refs.current[it.id] || {};
+                        refs.current[it.id].rate = el;
+                      }}
+                    />
+                  </td>
+                  <td>
+                    <input
+                      type="number"
+                      value={it.qty}
+                      onChange={(e) => updateItem(it.id, "qty", e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Tab" && !e.shiftKey) {
+                          const last = items[items.length - 1];
+                          if (last && last.id === it.id) {
+                            e.preventDefault();
+                            const newId = addItem();
+                            setTimeout(() => {
+                              const node = refs.current?.[newId]?.billingCode;
+                              if (node && typeof node.focus === "function") node.focus();
+                            }, 0);
                           }
-                        }}
-                        ref={(el) => {
-                          refs.current[it.id] = refs.current[it.id] || {};
-                          refs.current[it.id].qty = el;
-                        }}
-                      />
-                    </td>
-                    <td className="right">{itemAmount(it).toFixed(2)}</td>
-                    <td>
-                      <button
-                        type="button"
-                        className="remove-btn"
-                        onClick={() => removeItem(it.id)}
-                        disabled={items.length === 1}
-                        title={
-                          items.length === 1
-                            ? "At least one line item is required"
-                            : "Remove this line"
                         }
-                      >
-                        Remove
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-
-            <div className="subtotal-row">
-              <div className="subtotal">Subtotal: ${subtotal.toFixed(2)}</div>
-            </div>
-
-            <div className="form-actions invoice-actions-centered">
-              <button
-                type="button"
-                className="remove-btn"
-                onClick={internalCancel}
-              >
-                Cancel
-              </button>
-              <button
-                className="save-btn"
-                type="button"
-                onClick={handleSaveInvoice}
-              >
-                Save
-              </button>
-            </div>
+                      }}
+                      ref={(el) => {
+                        refs.current[it.id] = refs.current[it.id] || {};
+                        refs.current[it.id].qty = el;
+                      }}
+                    />
+                  </td>
+                  <td className="right">{itemAmount(it).toFixed(2)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      className="btn danger"
+                      onClick={() => removeItem(it.id)}
+                      disabled={items.length === 1}
+                      title={
+                        items.length === 1
+                          ? "At least one line item is required"
+                          : "Remove this line"
+                      }
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="line-footer">
+          <div className="line-metrics">
+          </div>
+          <div className="subtotal-card">
+            <p>Subtotal</p>
+            <strong>${subtotal.toFixed(2)}</strong>
           </div>
         </div>
-      </div>
+        <div className="action-row">
+          <button type="button" className="btn ghost" onClick={internalCancel}>
+            Cancel
+          </button>
+          <button className="btn primary" type="button" onClick={handleSaveInvoice}>
+            Save invoice
+          </button>
+        </div>
+      </section>
     </div>
   );
 }

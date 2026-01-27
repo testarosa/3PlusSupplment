@@ -1,4 +1,5 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react'
+import React, { useCallback, useState, useMemo, useRef, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useSelector } from 'react-redux'
 import { selectAuth } from './store/slices/authSlice'
 import './CreateInvoiceTemplate.css'
@@ -99,11 +100,135 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
     return out
   }
 
-  // Billing code autocomplete options (sample/demo data)
-  const billingCodeOptions = []
+  // Billing code autocomplete cache (used for quick suggestions)
+  const [billingCodeOptions, setBillingCodeOptions] = useState([])
+  const [billingCodeBootstrapped, setBillingCodeBootstrapped] = useState(false)
 
   const [ac, setAc] = useState({ id: null, list: [], index: -1, visible: false, query: '' })
+  const [billingAcStyle, setBillingAcStyle] = useState(null)
+  const [customerAcStyle, setCustomerAcStyle] = useState(null)
   const billingDebounce = useRef({})
+
+  useEffect(() => {
+    let alive = true
+
+    const normalizeCodes = (results) => {
+      let list = (results || []).map((it) => ({
+        code: (it?.value ?? it?.code ?? '').toString().trim(),
+        desc: (it?.name ?? it?.description ?? it?.desc ?? '').toString().trim(),
+      }))
+
+      const seen = new Set()
+      list = list.filter((item) => {
+        if (!item.code) return false
+        const key = `${item.code.toLowerCase()}::${(item.desc || '').toLowerCase()}`
+        if (seen.has(key)) return false
+        seen.add(key)
+        return true
+      })
+
+      // Keep a reasonable cap; the dropdown itself can scroll.
+      return list.slice(0, 50)
+    }
+
+    ;(async () => {
+      try {
+        const results = await getBillingCodes('')
+        if (!alive) return
+        setBillingCodeOptions(normalizeCodes(results))
+      } catch (err) {
+        // ignore preload failures; live search still works
+      } finally {
+        if (alive) setBillingCodeBootstrapped(true)
+      }
+    })()
+
+    return () => { alive = false }
+  }, [])
+
+  const updateBillingAcStyle = useCallback(() => {
+    const id = ac?.id
+    if (!id) return
+    const node = refs.current?.[id]?.billingCode
+    if (!node) return
+
+    const rect = node.getBoundingClientRect()
+    const margin = 12
+    const preferredWidth = 320
+
+    let width = Math.min(preferredWidth, window.innerWidth - margin * 2)
+    width = Math.max(240, width)
+
+    let left = rect.left
+    if (left + width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - width)
+    }
+
+    const top = rect.bottom + 6
+
+    const maxHeight = Math.max(140, Math.min(260, window.innerHeight - top - margin))
+
+    setBillingAcStyle({
+      position: 'fixed',
+      top,
+      left,
+      width,
+      maxHeight,
+      zIndex: 3000,
+    })
+  }, [ac?.id])
+
+  const updateCustomerAcStyle = useCallback(() => {
+    const node = refs.current?.customerName
+    if (!node) return
+
+    const rect = node.getBoundingClientRect()
+    const margin = 12
+
+    let width = rect.width
+    width = Math.min(Math.max(width, 260), window.innerWidth - margin * 2)
+
+    let left = rect.left
+    if (left + width > window.innerWidth - margin) {
+      left = Math.max(margin, window.innerWidth - margin - width)
+    }
+
+    const top = rect.bottom + 6
+    const maxHeight = Math.max(140, Math.min(260, window.innerHeight - top - margin))
+
+    setCustomerAcStyle({
+      position: 'fixed',
+      top,
+      left,
+      width,
+      maxHeight,
+      zIndex: 3000,
+    })
+  }, [])
+
+  useEffect(() => {
+    if (!ac.visible || !ac.id) return
+    updateBillingAcStyle()
+    const handle = () => updateBillingAcStyle()
+    window.addEventListener('scroll', handle, true)
+    window.addEventListener('resize', handle)
+    return () => {
+      window.removeEventListener('scroll', handle, true)
+      window.removeEventListener('resize', handle)
+    }
+  }, [ac.visible, ac.id, updateBillingAcStyle])
+
+  useEffect(() => {
+    if (!acCustomer.visible) return
+    updateCustomerAcStyle()
+    const handle = () => updateCustomerAcStyle()
+    window.addEventListener('scroll', handle, true)
+    window.addEventListener('resize', handle)
+    return () => {
+      window.removeEventListener('scroll', handle, true)
+      window.removeEventListener('resize', handle)
+    }
+  }, [acCustomer.visible, updateCustomerAcStyle])
   useEffect(() => {
     return () => {
       // clear any billing debounce timers
@@ -142,32 +267,49 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
       billingDebounce.current[id] = null
     }
 
-    // short queries -> local fallback list
-    if (q.length < 2) {
-      const list = q ? billingCodeOptions.filter((o) => o.code.toLowerCase().includes(q.toLowerCase()) || (o.desc && o.desc.toLowerCase().includes(q.toLowerCase()))) : billingCodeOptions.slice(0, 6)
+    // empty query -> show cached suggestions
+    if (!q) {
+      const list = billingCodeOptions.slice(0, 20)
       setAc({ id, list, index: list.length ? 0 : -1, visible: list.length > 0, query: value })
       return
     }
 
+    // short queries -> local fallback; if no cached match, fall through to API
+    if (q.length < 2) {
+      const lowered = q.toLowerCase()
+      const list = billingCodeOptions.filter((o) => o.code.toLowerCase().includes(lowered) || (o.desc && o.desc.toLowerCase().includes(lowered)))
+      if (list.length) {
+        setAc({ id, list, index: list.length ? 0 : -1, visible: true, query: value })
+        return
+      }
+    }
+
     // show loading placeholder
-    setAc({ id, list: [{ code: '__loading', desc: 'Searching...' }], index: 0, visible: true, query: value })
+    setAc({ id, list: [{ code: '__loading', desc: 'Searching...', disabled: true }], index: 0, visible: true, query: value })
 
     // debounce remote lookup
     billingDebounce.current[id] = setTimeout(async () => {
       try {
         console.debug('[CreateInvoiceTemplate] lookup billing codes for', q)
         const results = await getBillingCodes(q)
-        // map API items {name, value} -> { code: value, desc: name }
-        let list = (results || []).map((it) => ({ code: it.value, desc: it.name }))
-        // deduplicate by code (value) then desc
+        let list = (results || []).map((it) => ({
+          code: (it?.value ?? it?.code ?? '').toString().trim(),
+          desc: (it?.name ?? it?.description ?? it?.desc ?? '').toString().trim(),
+        }))
+
         const seen = new Set()
-        list = list.filter((it) => {
-          const key = `${(it.code || '').toString()}::${(it.desc || '').toString()}`.toLowerCase()
+        list = list.filter((item) => {
+          if (!item.code) return false
+          const key = `${item.code.toLowerCase()}::${(item.desc || '').toLowerCase()}`
           if (seen.has(key)) return false
           seen.add(key)
           return true
         })
-        setAc((s) => ({ id, list, index: list.length ? 0 : -1, visible: list.length > 0, query: value }))
+
+        list = list.slice(0, 50)
+        if (!list.length) list = [{ code: '__empty', desc: 'No matching billing codes', disabled: true }]
+
+        setAc({ id, list, index: list.length ? 0 : -1, visible: true, query: value })
       } catch (err) {
         console.warn('[CreateInvoiceTemplate] billing code lookup failed', err)
         setAc((s) => ({ id, list: [], index: -1, visible: false, query: value }))
@@ -179,6 +321,7 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
 
   const selectAc = (id, opt) => {
     if (!opt) return
+    if (opt.disabled || opt.code === '__loading' || opt.code === '__empty') return
     // cancel pending debounce for this id
     if (billingDebounce.current[id]) {
       clearTimeout(billingDebounce.current[id])
@@ -211,6 +354,45 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
 
   const subtotal = useMemo(() => items.reduce((s, it) => s + itemAmount(it), 0), [items])
 
+  const lineStats = useMemo(() => {
+    const filled = items.filter((it) => it.billingCode && it.description).length
+    const zeroTotals = items.filter((it) => itemAmount(it) <= 0).length
+    return {
+      total: items.length,
+      ready: filled,
+      pending: Math.max(items.length - filled, 0),
+      zeroTotals,
+    }
+  }, [items])
+
+  const readiness = useMemo(() => ({
+    customer: Boolean(customerName && customerId),
+    logistics: Boolean((freightType || '').trim() && Number(netTerm) > 0),
+    lines: lineStats.total > 0 && lineStats.ready === lineStats.total,
+  }), [customerName, customerId, freightType, netTerm, lineStats.total, lineStats.ready])
+
+  const progressSteps = useMemo(() => [
+    {
+      label: 'Customer match',
+      complete: readiness.customer,
+      detail: readiness.customer ? `Linked ID #${customerId}` : 'Search ERP directory',
+    },
+    {
+      label: 'Logistics rules',
+      complete: readiness.logistics,
+      detail: readiness.logistics ? `${netTerm || 0}-day • ${freightType || 'Freight TBD'}` : 'Add net terms & freight',
+    },
+    {
+      label: 'Line items',
+      complete: readiness.lines,
+      detail: `${lineStats.ready}/${lineStats.total} ready`,
+    },
+  ], [readiness, customerId, netTerm, freightType, lineStats.ready, lineStats.total])
+
+  const avgLineAmount = useMemo(() => (
+    lineStats.total ? subtotal / lineStats.total : 0
+  ), [lineStats.total, subtotal])
+
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState(null)
 
@@ -242,6 +424,7 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
     setSaving(true)
     setSaveError(null)
     try {
+      console.log('Submitting template', isEditing ? 'update' : 'create', tpl) 
       const res = isEditing
         ? await updateInvoiceTemplate(template.id, tpl)
         : await saveInvoiceTemplate(tpl)
@@ -310,202 +493,292 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
   }
 
   return (
-    <div className="create-template">
-      <h2>Create Invoice Template</h2>
-      <form onSubmit={handleSubmit} className="create-form">
-        <div className="field-row">
-          <label>Customer Name</label>
-          <div className="ac-wrap">
-            <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-            <input
-              className="customer-input"
-              value={customerName}
-              onChange={(e) => handleCustomerChange(e.target.value)}
-              onKeyDown={(e) => {
-                if (acCustomer.visible) {
-                  if (e.key === 'ArrowDown') {
-                    e.preventDefault()
-                    setAcCustomer((s) => ({ ...s, index: Math.min(s.index + 1, s.list.length - 1) }))
-                  } else if (e.key === 'ArrowUp') {
-                    e.preventDefault()
-                    setAcCustomer((s) => ({ ...s, index: Math.max(s.index - 1, 0) }))
-                  } else if (e.key === 'Enter') {
-                    e.preventDefault()
-                    const sel = acCustomer.list[acCustomer.index]
-                    if (sel) selectCustomer(sel)
-                  }
-                }
-              }}
-              onBlur={() => setTimeout(() => setAcCustomer((s) => ({ ...s, visible: false })), 400)}
-              placeholder="Customer name"
-              ref={(el) => { refs.current.term = refs.current.term || el }}
-            />
-            {customerId != null && (
-              <div className="customer-id">ID: {customerId}</div>
-            )}
+    <div className="template-builder-page">
+      <section className="panel builder-hero">
+        <div className="hero-copy">
+          <p className="eyebrow">Template studio</p>
+          <h2>{isEditing ? 'Tune your invoice template' : 'Create invoice templates in minutes'}</h2>
+        </div>
+      </section>
+
+
+      <form onSubmit={handleSubmit} className="template-builder" autoComplete="off">
+        <section className="panel builder-form">
+          <header className="panel-heading">
+            <div>
+              <p className="eyebrow">Template details</p>
+              <h3>Customer &amp; logistics</h3>
+            </div>
+          </header>
+
+          <div className="form-grid">
+            <div className="field span-2">
+              <label htmlFor="customerName">Customer name</label>
+              <p className="field-hint">Begin typing to pull customers from the ERP directory.</p>
+              <div className="ac-wrap customer-ac">
+                <div className="customer-input-row">
+                  <input
+                    id="customerName"
+                    className="customer-input"
+                    name="customerName"
+                    value={customerName}
+                    onChange={(e) => handleCustomerChange(e.target.value)}
+                    autoComplete="off"
+                    autoCorrect="off"
+                    autoCapitalize="none"
+                    spellCheck={false}
+                    onKeyDown={(e) => {
+                      if (acCustomer.visible) {
+                        if (e.key === 'ArrowDown') {
+                          e.preventDefault()
+                          setAcCustomer((s) => ({ ...s, index: Math.min(s.index + 1, s.list.length - 1) }))
+                        } else if (e.key === 'ArrowUp') {
+                          e.preventDefault()
+                          setAcCustomer((s) => ({ ...s, index: Math.max(s.index - 1, 0) }))
+                        } else if (e.key === 'Enter') {
+                          e.preventDefault()
+                          const sel = acCustomer.list[acCustomer.index]
+                          if (sel) selectCustomer(sel)
+                        }
+                      }
+                    }}
+                    onBlur={() => setTimeout(() => setAcCustomer((s) => ({ ...s, visible: false })), 400)}
+                    placeholder="Search by customer name"
+                    ref={(el) => { refs.current.customerName = el }}
+                  />
+                  {customerId != null && (
+                    <span className="customer-id-chip">ID #{customerId}</span>
+                  )}
+                </div>
+
+                {acCustomer.visible && typeof document !== 'undefined' &&
+                  createPortal(
+                    <ul className="ac-list ac-list-portal" role="listbox" style={customerAcStyle || undefined}>
+                      {acCustomer.list.map((c, idx) => (
+                        <li
+                          key={`${c.id ?? c.name}-${idx}`}
+                          className={idx === acCustomer.index ? 'active' : ''}
+                          onMouseDown={(ev) => { ev.preventDefault(); selectCustomer(c) }}
+                          role="option"
+                          aria-selected={idx === acCustomer.index}
+                        >
+                          {c.name}
+                        </li>
+                      ))}
+                    </ul>,
+                    document.body
+                  )}
+              </div>
             </div>
 
-            {acCustomer.visible && (
-              <ul className="ac-list" role="listbox">
-                {acCustomer.list.map((c, idx) => (
-                  <li key={c.id}
-                      className={idx === acCustomer.index ? 'active' : ''}
-                      onMouseDown={(ev) => { ev.preventDefault(); selectCustomer(c) }}
-                      role="option"
-                      aria-selected={idx === acCustomer.index}
-                  >
-                    {c.name}
-                  </li>
+            <div className="field">
+              <label htmlFor="netTerm">Net terms (days)</label>
+              <p className="field-hint">Used to generate due dates for invoices.</p>
+              <input
+                id="netTerm"
+                type="number"
+                value={netTerm}
+                onChange={(e) => setNetTerm(e.target.value)}
+                ref={(el) => { refs.current.term = el }}
+              />
+            </div>
+
+            <div className="field">
+              <label htmlFor="freightType">Freight type</label>
+              <p className="field-hint">Drives default freight billing rules.</p>
+              <select
+                id="freightType"
+                className="field-select"
+                value={freightType}
+                onChange={(e) => setFreightType(e.target.value)}
+              >
+                {freightOptions.map((opt) => (
+                  <option key={opt?.id ?? opt?.code} value={opt?.code ?? opt?.value ?? ''}>
+                    {opt?.value ?? opt?.code ?? ''}
+                  </option>
                 ))}
-              </ul>
-            )}
-
+              </select>
+            </div>
           </div>
-        </div>
+        </section>
 
-        <div className="field-row">
-          <label>Term (days)</label>
-          <input type="number" value={netTerm} onChange={(e) => setNetTerm(e.target.value)} />
-        </div>
+        <section className="panel builder-line-items">
+          <header className="panel-heading">
+            <div>
+              <p className="eyebrow">Line items</p>
+              <h3>Build the charge stack</h3>
+            </div>
+            <button
+              type="button"
+              className="btn outline"
+              onClick={() => {
+                const newId = addItem()
+                setTimeout(() => {
+                  const node = refs.current?.[newId]?.billingCode
+                  if (node && typeof node.focus === 'function') node.focus()
+                }, 0)
+              }}
+            >
+              + Add row
+            </button>
+          </header>
+          <p className="panel-hint">Billing codes auto-complete; use Tab on the final quantity to spawn another line.</p>
 
-        <div className="field-row">
-          <label>Freight Type</label>
-            <select className="field-select" value={freightType} onChange={(e) => setFreightType(e.target.value)}>
-              {freightOptions.map((opt) => (
-                <option key={opt?.id ?? opt?.code} value={opt?.code ?? opt?.value ?? ''}>
-                  {opt?.value ?? opt?.code ?? ''}
-                </option>
-              ))}
-            </select>
-        </div>
-
-        <div className="items-area">
-          <div className="items-header">
-            <h3>Line Items</h3>
-          </div>
-          <table className="items-table">
-            <thead>
-              <tr>
-                <th>Billing Code</th>
-                <th>Description</th>
-                <th>Rate</th>
-                <th>Qty</th>
-                <th>Amount</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map((it) => (
-                <tr key={it.id}>
-                  <td className="billing-cell">
-                    <input
-                      value={it.billingCode}
-                      onChange={(e) => handleAcChange(it.id, e.target.value)}
-                      onKeyDown={(e) => {
-                        if (ac.visible && ac.id === it.id) {
-                          if (e.key === 'ArrowDown') {
-                            e.preventDefault()
-                            setAc((s) => ({ ...s, index: Math.min(s.index + 1, s.list.length - 1) }))
-                          } else if (e.key === 'ArrowUp') {
-                            e.preventDefault()
-                            setAc((s) => ({ ...s, index: Math.max(s.index - 1, 0) }))
-                          } else if (e.key === 'Enter') {
-                            e.preventDefault()
-                            const sel = ac.list[ac.index]
-                            if (sel) selectAc(it.id, sel)
-                          }
-                        }
-                      }}
-                      onBlur={() => setTimeout(() => setAc((s) => ({ ...s, visible: false })), 150)}
-                      ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].billingCode = el }}
-                    />
-
-                    {ac.visible && ac.id === it.id && (
-                      <ul className="ac-list" role="listbox">
-                        {ac.list.map((opt, idx) => (
-                          <li
-                            key={opt.code}
-                            className={idx === ac.index ? 'active' : ''}
-                            onMouseDown={(ev) => { ev.preventDefault(); selectAc(it.id, opt) }}
-                            role="option"
-                            aria-selected={idx === ac.index}
-                          >
-                                    <div style={{display: 'flex', flexDirection: 'column'}}>
-                                      <div className="ac-code" style={{fontWeight:600}}>{opt.code}</div>
-                                      {opt.desc && <div className="ac-desc" style={{color: '#6b7280', fontSize: '13px'}}>{opt.desc}</div>}
-                                    </div>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
-                  <td>
-                    <input
-                      value={it.description}
-                      onChange={(e) => updateItem(it.id, 'description', e.target.value)}
-                      ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].description = el }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={it.rate}
-                      onChange={(e) => updateItem(it.id, 'rate', e.target.value)}
-                      ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].rate = el }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      value={it.qty}
-                      onChange={(e) => updateItem(it.id, 'qty', e.target.value)}
-                      onKeyDown={(e) => {
-                        // If user tabs forward on the last row's last input, add a new row and focus its first field
-                        if (e.key === 'Tab' && !e.shiftKey) {
-                          const last = items[items.length - 1]
-                          if (last && last.id === it.id) {
-                            e.preventDefault()
-                            const newId = addItem()
-                            // focus the billingCode input of the newly added row after DOM updates
-                            setTimeout(() => {
-                              const node = refs.current?.[newId]?.billingCode
-                              if (node && typeof node.focus === 'function') node.focus()
-                            }, 0)
-                          }
-                        }
-                      }}
-                      ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].qty = el }}
-                    />
-                  </td>
-                  <td className="right">{itemAmount(it).toFixed(2)}</td>
-                  <td>
-                    <button
-                      type="button"
-                      className="remove-btn"
-                      onClick={() => removeItem(it.id)}
-                      disabled={items.length === 1}
-                      title={items.length === 1 ? 'At least one line item is required' : 'Remove this line'}
-                    >
-                      Remove
-                    </button>
-                  </td>
+          <div className="line-table-wrapper">
+            <table className="items-table">
+              <thead>
+                <tr>
+                  <th>Billing code</th>
+                  <th>Description</th>
+                  <th>Rate</th>
+                  <th>Qty</th>
+                  <th>Amount</th>
+                  <th></th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {items.map((it) => (
+                  <tr key={it.id}>
+                    <td className="billing-cell">
+                      <input
+                        value={it.billingCode}
+                        onChange={(e) => handleAcChange(it.id, e.target.value)}
+                        onFocus={() => {
+                          if (ac.visible && ac.id === it.id) return
+                          if (billingCodeOptions.length) {
+                            const list = billingCodeOptions.slice(0, 6)
+                            setAc({ id: it.id, list, index: list.length ? 0 : -1, visible: list.length > 0, query: it.billingCode })
+                            return
+                          }
 
-          <div className="items-actions">
-            <div className="subtotal">Subtotal: ${subtotal.toFixed(2)}</div>
+                          if (!billingCodeBootstrapped) {
+                            setAc({ id: it.id, list: [{ code: '__loading', desc: 'Loading...', disabled: true }], index: 0, visible: true, query: it.billingCode })
+                          }
+                        }}
+                        onKeyDown={(e) => {
+                          if (ac.visible && ac.id === it.id) {
+                            if (e.key === 'ArrowDown') {
+                              e.preventDefault()
+                              setAc((s) => ({ ...s, index: Math.min(s.index + 1, s.list.length - 1) }))
+                            } else if (e.key === 'ArrowUp') {
+                              e.preventDefault()
+                              setAc((s) => ({ ...s, index: Math.max(s.index - 1, 0) }))
+                            } else if (e.key === 'Enter') {
+                              e.preventDefault()
+                              const sel = ac.list[ac.index]
+                              if (sel) selectAc(it.id, sel)
+                            }
+                          }
+                        }}
+                        onBlur={() => setTimeout(() => setAc((s) => ({ ...s, visible: false })), 150)}
+                        ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].billingCode = el }}
+                      />
+
+                      {ac.visible && ac.id === it.id && typeof document !== 'undefined' &&
+                        createPortal(
+                          <ul className="ac-list ac-list-portal" role="listbox" style={billingAcStyle || undefined}>
+                            {ac.list.map((opt, idx) => (
+                              <li
+                                key={`${opt.code}-${idx}`}
+                                className={`${idx === ac.index ? 'active' : ''} ${opt.disabled ? 'disabled' : ''}`.trim()}
+                                onMouseDown={(ev) => {
+                                  if (opt.disabled) return
+                                  ev.preventDefault();
+                                  selectAc(it.id, opt)
+                                }}
+                                role="option"
+                                aria-selected={idx === ac.index}
+                                aria-disabled={Boolean(opt.disabled)}
+                              >
+                                <div className="ac-option">
+                                  <div className="ac-code">{opt.code}</div>
+                                  {opt.desc && <div className="ac-desc">{opt.desc}</div>}
+                                </div>
+                              </li>
+                            ))}
+                          </ul>,
+                          document.body
+                        )}
+                    </td>
+                    <td>
+                      <input
+                        value={it.description}
+                        onChange={(e) => updateItem(it.id, 'description', e.target.value)}
+                        ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].description = el }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={it.rate}
+                        onChange={(e) => updateItem(it.id, 'rate', e.target.value)}
+                        ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].rate = el }}
+                      />
+                    </td>
+                    <td>
+                      <input
+                        type="number"
+                        value={it.qty}
+                        onChange={(e) => updateItem(it.id, 'qty', e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Tab' && !e.shiftKey) {
+                            const last = items[items.length - 1]
+                            if (last && last.id === it.id) {
+                              e.preventDefault()
+                              const newId = addItem()
+                              setTimeout(() => {
+                                const node = refs.current?.[newId]?.billingCode
+                                if (node && typeof node.focus === 'function') node.focus()
+                              }, 0)
+                            }
+                          }
+                        }}
+                        ref={(el) => { refs.current[it.id] = refs.current[it.id] || {}; refs.current[it.id].qty = el }}
+                      />
+                    </td>
+                    <td className="right">{itemAmount(it).toFixed(2)}</td>
+                    <td>
+                      <button
+                        type="button"
+                        className="btn danger"
+                        onClick={() => removeItem(it.id)}
+                        disabled={items.length === 1}
+                        title={items.length === 1 ? 'At least one line item is required' : 'Remove this line'}
+                      >
+                        Remove
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
 
-        <div className="form-actions">
-          {onCancel && <button type="button" className="remove-btn" onClick={() => onCancel?.()}>Cancel</button>}
-          <button className="save-btn" type="submit" disabled={saving}>{saving ? 'Saving...' : 'Save Template'}</button>
-        </div>
-        {saveError && (
-          <div className="save-error" role="alert">{saveError}</div>
-        )}
+          <div className="line-footer">
+            <div className="line-metrics">
+            </div>
+            <div className="subtotal-card">
+              <p>Subtotal</p>
+              <strong>${subtotal.toFixed(2)}</strong>
+            </div>
+          </div>
+        </section>
+
+        <section className="panel action-panel">
+          <div className="action-grid">
+            {onCancel && (
+              <button type="button" className="btn ghost" onClick={() => onCancel?.()}>
+                Cancel
+              </button>
+            )}
+            <button className="btn primary" type="submit" disabled={saving}>
+              {saving ? 'Saving…' : isEditing ? 'Update template' : 'Save template'}
+            </button>
+          </div>
+          {saveError && (
+            <div className="save-error" role="alert">{saveError}</div>
+          )}
+        </section>
       </form>
     </div>
   )

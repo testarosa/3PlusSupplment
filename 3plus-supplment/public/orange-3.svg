@@ -1,0 +1,18 @@
+<svg width="128" height="128" viewBox="0 0 128 128" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Orange number 3 badge">
+  <defs>
+    <linearGradient id="g" x1="24" y1="20" x2="104" y2="108" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FF9A1F"/>
+      <stop offset="1" stop-color="#FF6A00"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="128" height="128" filterUnits="userSpaceOnUse" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="6" stdDeviation="8" flood-color="#0B1220" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <g filter="url(#shadow)">
+    <circle cx="64" cy="64" r="46" fill="url(#g)"/>
+    <circle cx="64" cy="64" r="46" stroke="rgba(255,255,255,0.45)" stroke-width="2"/>
+  </g>
+
+  <path d="M52 44c0-8 6.5-14 14.5-14H72c8.3 0 15 6.7 15 15 0 5.7-3.2 10.6-7.8 13.1 5.8 2.2 9.8 7.8 9.8 14.3 0 9.1-7.4 16.5-16.5 16.5H66.5C58.5 89.9 52 83.4 52 75.4" stroke="white" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

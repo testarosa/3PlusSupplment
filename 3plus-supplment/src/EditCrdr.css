@@ -1,0 +1,129 @@
+.edit-crdr-page {
+	display: flex;
+	flex-direction: column;
+	gap: 1.5rem;
+}
+
+.edit-crdr-page .panel {
+	background: #fff;
+	border-radius: 14px;
+	padding: 1.25rem 1.5rem;
+	box-shadow: 0 12px 24px rgba(15, 23, 42, 0.06);
+}
+
+.edit-crdr-page .edit-crdr-hero {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1.5rem;
+}
+
+.edit-crdr-page .hero-meta {
+	display: flex;
+	flex-direction: column;
+	gap: 0.35rem;
+	font-weight: 600;
+	color: #1f2937;
+}
+
+.edit-crdr-page .form-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+	gap: 1rem;
+}
+
+.edit-crdr-page .details-header {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	gap: 1rem;
+}
+
+.edit-crdr-page .totals {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 0.75rem;
+	font-weight: 600;
+	color: #0f172a;
+}
+
+.edit-crdr-page .totals span {
+	background: #f8fafc;
+	border: 1px solid #e2e8f0;
+	border-radius: 999px;
+	padding: 0.35rem 0.85rem;
+	font-size: 0.9rem;
+}
+
+.edit-crdr-page .table-wrapper {
+	margin-top: 1rem;
+	overflow-x: auto;
+	border: 1px solid #e2e8f0;
+	border-radius: 12px;
+	background: #ffffff;
+}
+
+.edit-crdr-page .templates-table {
+	width: 100%;
+	border-collapse: collapse;
+	min-width: 540px;
+}
+
+.edit-crdr-page .templates-table th,
+.edit-crdr-page .templates-table td {
+	padding: 0.85rem 0.75rem;
+	border-bottom: 1px solid #e2e8f0;
+	text-align: left;
+}
+
+.edit-crdr-page .templates-table thead th {
+	background: #f1f5f9;
+	color: #0f172a;
+	font-weight: 700;
+	font-size: 0.9rem;
+	letter-spacing: 0.02em;
+}
+
+.edit-crdr-page .templates-table tbody tr:nth-child(even) {
+	background: #f8fafc;
+}
+
+.edit-crdr-page .templates-table tbody tr:hover {
+	background: #eef2ff;
+}
+
+.edit-crdr-page .templates-table input {
+	width: 100%;
+	border: 1px solid #cbd5f5;
+	border-radius: 8px;
+	padding: 0.55rem 0.6rem;
+	font-size: 0.95rem;
+	background: #ffffff;
+	transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.edit-crdr-page .templates-table input:focus {
+	outline: none;
+	border-color: #6366f1;
+	box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+}
+
+.edit-crdr-page .templates-table .btn.danger.ghost {
+	background: #fff1f2;
+	border: 1px solid #fecdd3;
+	color: #be123c;
+	padding: 0.4rem 0.8rem;
+	border-radius: 999px;
+	font-weight: 600;
+}
+
+.edit-crdr-page .templates-table .btn.danger.ghost:hover {
+	background: #ffe4e6;
+}
+
+.edit-crdr-page .error-row {
+	background: #fee2e2;
+	color: #991b1b;
+	border-radius: 10px;
+	padding: 0.75rem 1rem;
+}

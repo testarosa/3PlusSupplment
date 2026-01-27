@@ -1,0 +1,326 @@
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
+
+/*
+  CRDR Template Builder styles.
+  Scoped under `.crdr-template-builder` to avoid impacting the invoice template builder.
+*/
+
+.crdr-template-builder {
+  --ink: #061424;
+  --muted: #546476;
+  --accent: #2563eb;
+  --accent-2: #0ea5a6;
+  --danger: #dc2626;
+  --panel: rgba(255, 255, 255, 0.92);
+  --border: rgba(6, 20, 36, 0.1);
+  --shadow: 0 26px 50px rgba(6, 20, 36, 0.1);
+  --bg-0: #eef7ff;
+  --bg-1: #fff7ef;
+
+  font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
+  color: var(--ink);
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.crdr-template-builder .panel {
+  background: var(--panel);
+  border-radius: 22px;
+  border: 1px solid var(--border);
+  padding: 1.5rem;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
+  position: relative;
+  z-index: 1;
+}
+
+.crdr-template-builder .crdr-header-panel {
+  z-index: 30;
+  overflow: visible;
+}
+
+.crdr-template-builder .crdr-details-panel {
+  z-index: 10;
+}
+
+.crdr-template-builder .builder-hero {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+  background:
+    radial-gradient(120% 120% at 0% 0%, rgba(37, 99, 235, 0.18), transparent 55%),
+    radial-gradient(120% 140% at 100% 0%, rgba(14, 165, 166, 0.18), transparent 60%),
+    linear-gradient(135deg, var(--bg-1) 0%, var(--bg-0) 55%, #f3f6ff 100%);
+}
+
+.crdr-template-builder .eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.34em;
+  font-size: 0.72rem;
+  color: var(--accent);
+  margin: 0;
+}
+
+.crdr-template-builder .hero-copy h2 {
+  margin: 0.35rem 0 0.65rem;
+  font-size: 2.1rem;
+  letter-spacing: -0.02em;
+}
+
+.crdr-template-builder .hero-copy p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.crdr-template-builder .hero-badges {
+  margin-top: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.crdr-template-builder .hero-badges span {
+  border-radius: 999px;
+  border: 1px solid rgba(6, 20, 36, 0.14);
+  padding: 0.35rem 0.85rem;
+  font-size: 0.95rem;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.crdr-template-builder .progress-rail {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.crdr-template-builder .progress-rail li {
+  display: flex;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0.9rem;
+  border-radius: 16px;
+  border: 1px dashed rgba(6, 20, 36, 0.14);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.crdr-template-builder .progress-rail li.complete {
+  border-style: solid;
+  border-color: rgba(37, 99, 235, 0.35);
+  background: rgba(37, 99, 235, 0.07);
+}
+
+.crdr-template-builder .progress-bullet {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(6, 20, 36, 0.08);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+}
+
+.crdr-template-builder .progress-rail p {
+  margin: 0;
+  font-weight: 700;
+}
+
+.crdr-template-builder .progress-rail small {
+  color: var(--muted);
+}
+
+.crdr-template-builder .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.crdr-template-builder .agent-name-field {
+  grid-column: 1 / -1;
+}
+
+.crdr-template-builder .agent-name-input {
+  font-size: 1.05rem;
+  padding: 0.8rem 0.95rem;
+}
+
+.crdr-template-builder .field > span {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.crdr-template-builder input,
+.crdr-template-builder select {
+  border-radius: 14px;
+  border: 1px solid rgba(6, 20, 36, 0.16);
+  padding: 0.6rem 0.75rem;
+  background: rgba(255, 255, 255, 0.85);
+  outline: none;
+  transition: border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.crdr-template-builder .ac-wrapper {
+  position: relative;
+}
+
+.crdr-template-builder .ac-menu {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 1000;
+  border-radius: 16px;
+  border: 1px solid rgba(6, 20, 36, 0.14);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 40px rgba(6, 20, 36, 0.14);
+  overflow: hidden;
+  max-height: 280px;
+}
+
+.crdr-template-builder .ac-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  padding: 0.7rem 0.85rem;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.crdr-template-builder .ac-item.muted {
+  cursor: default;
+  color: var(--muted);
+}
+
+.crdr-template-builder .ac-item:hover {
+  background: rgba(37, 99, 235, 0.05);
+}
+
+.crdr-template-builder .ac-item.active {
+  background: rgba(37, 99, 235, 0.08);
+}
+
+.crdr-template-builder .ac-primary {
+  color: var(--ink);
+}
+
+.crdr-template-builder .ac-secondary {
+  color: var(--muted);
+  font-weight: 700;
+  font-size: 0.85rem;
+}
+
+.crdr-template-builder input:focus,
+.crdr-template-builder select:focus {
+  border-color: rgba(37, 99, 235, 0.6);
+  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+}
+
+.crdr-template-builder .error-row {
+  margin-top: 0.75rem;
+  border-radius: 16px;
+  padding: 0.85rem 1rem;
+  border: 1px solid rgba(220, 38, 38, 0.25);
+  background: rgba(220, 38, 38, 0.06);
+  color: #991b1b;
+}
+
+.crdr-template-builder .table-wrapper {
+  overflow: auto;
+  border-radius: 18px;
+  border: 1px solid rgba(6, 20, 36, 0.1);
+  background: rgba(255, 255, 255, 0.6);
+}
+
+.crdr-template-builder .templates-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.crdr-template-builder .templates-table thead th {
+  position: sticky;
+  top: 0;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(10px);
+  text-align: left;
+  font-size: 0.9rem;
+  color: var(--muted);
+  padding: 0.9rem 0.95rem;
+  border-bottom: 1px solid rgba(6, 20, 36, 0.1);
+}
+
+.crdr-template-builder .templates-table tbody td {
+  padding: 0.65rem 0.9rem;
+  border-bottom: 1px solid rgba(6, 20, 36, 0.08);
+  vertical-align: top;
+}
+
+.crdr-template-builder .templates-table tbody tr:hover {
+  background: rgba(37, 99, 235, 0.03);
+}
+
+.crdr-template-builder .templates-table input {
+  width: 100%;
+}
+
+.crdr-template-builder .btn {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 0.55rem 0.9rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.crdr-template-builder .btn.primary {
+  background: linear-gradient(135deg, var(--accent) 0%, #1d4ed8 100%);
+  color: white;
+}
+
+.crdr-template-builder .btn.outline {
+  background: rgba(255, 255, 255, 0.6);
+  border-color: rgba(6, 20, 36, 0.18);
+  color: var(--ink);
+}
+
+.crdr-template-builder .btn.ghost {
+  background: transparent;
+  border-color: rgba(6, 20, 36, 0.12);
+  color: var(--muted);
+}
+
+.crdr-template-builder .btn.danger {
+  background: rgba(220, 38, 38, 0.08);
+  border-color: rgba(220, 38, 38, 0.22);
+  color: var(--danger);
+}
+
+.crdr-template-builder .btn:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+@media (max-width: 720px) {
+  .crdr-template-builder .panel {
+    padding: 1.1rem;
+    border-radius: 18px;
+  }
+
+  .crdr-template-builder .hero-copy h2 {
+    font-size: 1.7rem;
+  }
+
+  .crdr-template-builder .templates-table thead th,
+  .crdr-template-builder .templates-table tbody td {
+    padding: 0.75rem;
+  }
+}
