@@ -369,6 +369,16 @@
   font-weight: 600;
 }
 
+.create-invoice-page .inline-success {
+  margin-top: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 16px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #047857;
+  font-weight: 600;
+}
+
 .create-invoice-page .header-grid {
   margin-top: 0.5rem;
   display: grid;

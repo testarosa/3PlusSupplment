@@ -37,6 +37,26 @@ const formatDate = (value) => {
   });
 };
 
+const parseMaybeJson = (payload) => {
+  if (typeof payload !== "string") return payload;
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return payload;
+  }
+};
+
+const getErrorMessage = (err, fallback) => {
+  const data = parseMaybeJson(err?.response?.data ?? err?.data);
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data && typeof data === "object") {
+    const message = data.message || data.error || data.title || data.detail || data.msg;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  if (typeof err?.message === "string" && err.message.trim()) return err.message;
+  return fallback;
+};
+
 const describeRelativeTime = (date) => {
   if (!date) return "just now";
   const delta = Date.now() - date.getTime();
@@ -87,7 +107,7 @@ function ListCrdr() {
     } catch (err) {
       setRows([]);
       setMeta({ message: "", success: false });
-      setError(err?.message ?? "Unable to fetch CRDRs");
+      setError(getErrorMessage(err, "Unable to fetch CRDRs"));
     } finally {
       setLoading(false);
     }
@@ -184,33 +204,6 @@ function ListCrdr() {
           </p>
         </div>
 
-        <div className="hero-status">
-          <div className="status-card">
-            <span className={`status-dot ${loading ? "syncing" : "ready"}`} />
-            <div>
-              <strong>{loading ? "Syncing" : "Ready"}</strong>
-              <small>{loading ? "Fetching CRDRs" : "Awaiting search"}</small>
-            </div>
-          </div>
-
-          <div className="metrics-grid" style={{ width: "100%" }}>
-            <div className="metric-card">
-              <p>Records</p>
-              <h4>{insight.total}</h4>
-              <small>Total CRDRs</small>
-            </div>
-            <div className="metric-card">
-              <p>Agents</p>
-              <h4>{insight.agentCount}</h4>
-              <small>Unique agents</small>
-            </div>
-            <div className="metric-card highlight">
-              <p>Avg Total</p>
-              <h4>{formatCurrency(insight.averageAmount)}</h4>
-              <small>Average total</small>
-            </div>
-          </div>
-        </div>
       </section>
 
       <section className="panel filters-panel">
@@ -265,17 +258,9 @@ function ListCrdr() {
             />
           </label>
 
-          <div className="form-actions" style={{ display: "flex", gap: "0.5rem" }}>
+          <div className="form-actions" style={{ display: "flex", gap: "0.5rem", height: "3rem" }}>
             <button type="submit" className="btn primary" disabled={loading}>
-              {loading ? "Searching…" : "Search CRDR"}
-            </button>
-            <button
-              type="button"
-              className="btn outline"
-              onClick={() => navigate("/crdr-templates")}
-              disabled={loading}
-            >
-              CRDR Templates
+              {loading ? "Searching…" : "Search"}
             </button>
           </div>
         </form>
@@ -294,7 +279,7 @@ function ListCrdr() {
             <button
               type="button"
               className="btn primary"
-              onClick={() => navigate("/crdr-templates/create")}
+              onClick={() => navigate("/crdr/create")}
             >
               Create
             </button>
@@ -375,9 +360,6 @@ function ListCrdr() {
                       <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
                         <button type="button" className="btn outline" onClick={() => handleEditCrdr(row)}>
                           Edit
-                        </button>
-                        <button type="button" className="btn danger" onClick={() => handleRemoveCrdr(row)}>
-                          Remove
                         </button>
                       </div>
                     </td>

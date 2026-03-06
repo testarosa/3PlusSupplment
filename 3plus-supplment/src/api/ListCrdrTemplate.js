@@ -62,6 +62,31 @@ export async function getCrdrTemplateByAgentName(agentName) {
   }
 }
 
+// GET /CrdrTemplate/GetByAgentId?agentId=...
+export async function getCrdrTemplateByAgentId(agentId) {
+  if (agentId === undefined || agentId === null || String(agentId).trim() === "") {
+    throw new Error("agentId is required")
+  }
+
+  const endpoint = buildInvoiceApiUrl(
+    `/CrdrTemplate/GetByAgentId?agentId=${encodeURIComponent(String(agentId).trim())}`
+  )
+
+  try {
+    const resp = await axios.get(endpoint, {
+      headers: { accept: "text/plain, application/json" },
+    })
+
+    const parsed = parseMaybeJson(resp?.data)
+    const list = Array.isArray(parsed?.data) ? parsed.data : []
+
+    return list.map(normalizeCrdrTemplateHeader).filter(Boolean)
+  } catch (err) {
+    console.warn("[getCrdrTemplateByAgentId] error", err?.message || err)
+    throw err
+  }
+}
+
 // POST /CrdrTemplate/Insert
 export async function insertCrdrTemplate(payload) {
   if (!payload || typeof payload !== "object") {
@@ -83,7 +108,54 @@ export async function insertCrdrTemplate(payload) {
   }
 }
 
+// POST /CrdrTemplate/Update
+export async function updateCrdrTemplate(payload) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("payload is required");
+  }
+
+  const endpoint = buildInvoiceApiUrl("/CrdrTemplate/Update");
+
+  try {
+    const resp = await axios.post(endpoint, payload, {
+      headers: { accept: "text/plain", "Content-Type": "application/json" },
+      responseType: "text",
+    });
+
+    return parseMaybeJson(resp?.data);
+  } catch (err) {
+    console.warn("[updateCrdrTemplate] error", err?.message || err);
+    throw err;
+  }
+}
+
+// DELETE /CrdrTemplate/Delete/{id}
+export async function deleteCrdrTemplate(headerId) {
+  if (headerId === undefined || headerId === null || String(headerId).trim() === "") {
+    throw new Error("headerId is required");
+  }
+
+  const endpoint = buildInvoiceApiUrl(
+    `/CrdrTemplate/Delete/${encodeURIComponent(String(headerId).trim())}`
+  );
+
+  try {
+    const resp = await axios.delete(endpoint, {
+      headers: { accept: "text/plain, application/json" },
+      responseType: "text",
+    });
+
+    return parseMaybeJson(resp?.data);
+  } catch (err) {
+    console.warn("[deleteCrdrTemplate] error", err?.message || err);
+    throw err;
+  }
+}
+
 export default {
   getCrdrTemplateByAgentName,
+  getCrdrTemplateByAgentId,
   insertCrdrTemplate,
+  updateCrdrTemplate,
+  deleteCrdrTemplate,
 };

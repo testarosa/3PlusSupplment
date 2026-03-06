@@ -7,7 +7,9 @@ const ListCrdr = React.lazy(() => import("../ListCrdr"));
 const ListInvoice = React.lazy(() => import("../ListInvoice"));
 const CreateInvoiceTemplate = React.lazy(() => import("../CreateInvoiceTemplate"));
 const CreateCrdrTemplate = React.lazy(() => import("../CreateCrdrTemplate"));
+const EditCrdrTemplate = React.lazy(() => import("../EditCrdrTemplate"));
 const CreateInvoice = React.lazy(() => import("../CreateInvoice"));
+const CreateCrdr = React.lazy(() => import("../CreateCrdr"));
 const EditInvoice = React.lazy(() => import("../EditInvoice"));
 const EditCrdr = React.lazy(() => import("../EditCrdr"));
 import "./Side.css";
@@ -179,6 +181,30 @@ function Side({ location, navigate, EditWrapper }) {
                   </div>
                 }
               />
+                            <Route
+                path="/invoices"
+                element={
+                  <div className="side-surface flush">
+                    <ListInvoice />
+                  </div>
+                }
+              />
+              <Route
+                path="/invoices/create"
+                element={
+                  <div className="side-surface flush">
+                    <CreateInvoice />
+                  </div>
+                }
+              />
+              <Route
+                path="/invoices/edit/:id"
+                element={
+                  <div className="side-surface">
+                    <EditInvoice />
+                  </div>
+                }
+              />
               <Route
                 path="/crdr-templates"
                 element={
@@ -196,10 +222,26 @@ function Side({ location, navigate, EditWrapper }) {
                 }
               />
               <Route
+                path="/crdr-templates/edit/:id"
+                element={
+                  <div className="side-surface">
+                    <EditCrdrTemplate />
+                  </div>
+                }
+              />
+              <Route
                 path="/crdr"
                 element={
                   <div className="side-surface flush">
                     <ListCrdr />
+                  </div>
+                }
+              />
+              <Route
+                path="/crdr/create"
+                element={
+                  <div className="side-surface">
+                    <CreateCrdr />
                   </div>
                 }
               />
@@ -233,30 +275,7 @@ function Side({ location, navigate, EditWrapper }) {
                   </div>
                 }
               />
-              <Route
-                path="/invoices"
-                element={
-                  <div className="side-surface flush">
-                    <ListInvoice />
-                  </div>
-                }
-              />
-              <Route
-                path="/invoices/create"
-                element={
-                  <div className="side-surface flush">
-                    <CreateInvoice />
-                  </div>
-                }
-              />
-              <Route
-                path="/invoices/edit/:id"
-                element={
-                  <div className="side-surface">
-                    <EditInvoice />
-                  </div>
-                }
-              />
+
             </Routes>
           </Suspense>
         </div>

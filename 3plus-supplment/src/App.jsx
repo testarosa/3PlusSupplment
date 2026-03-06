@@ -21,10 +21,10 @@ function App() {
   const navLinks = useMemo(
     () => [
       { label: 'Overview', to: '/' },
-      { label: 'Invoice Templates', to: '/templates' },
-      { label: 'CRDR Templates', to: '/crdr-templates' },
+      { label: 'Invoice Template', to: '/templates' },
+      { label: 'Invoice', to: '/invoices' },
+      { label: 'CRDR Template', to: '/crdr-templates' },
       { label: 'CRDR', to: '/crdr' },
-      { label: 'Invoices', to: '/invoices' },
     ],
     []
   )

@@ -1,9 +1,9 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import './CreateCrdrTemplate.css'
 import { getFreightTypes } from './api/freightTypes'
 import { searchAgentCompaniesByName } from './api/agentCompanies'
-import { insertCrdrTemplate } from './api/ListCrdrTemplate'
+import { insertCrdrTemplate, updateCrdrTemplate } from './api/ListCrdrTemplate'
 
 const DEFAULT_CRDR_TEMPLATE = {
   userName: 'POM',
@@ -23,6 +23,7 @@ const toNumberOrZero = (value) => {
 
 const createDetailRow = (overrides = {}) => ({
   id: overrides.id ?? `row-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+  detailId: overrides.detailId ?? null,
   description: overrides.description ?? '',
   debit: overrides.debit ?? 0,
   credit: overrides.credit ?? 0,
@@ -30,20 +31,25 @@ const createDetailRow = (overrides = {}) => ({
 
 function CreateCrdrTemplate({ template, onSave, onCancel }) {
   const navigate = useNavigate()
+  const location = useLocation()
+  const templateFromState = location?.state?.template
+  const headerIdFromState = location?.state?.headerId
+  const modeFromState = location?.state?.mode
+  const activeTemplate = template ?? templateFromState
 
   const seed = useMemo(() => {
-    if (template && typeof template === 'object') {
+    if (activeTemplate && typeof activeTemplate === 'object') {
       return {
         ...DEFAULT_CRDR_TEMPLATE,
-        ...template,
+        ...activeTemplate,
         details:
-          Array.isArray(template.details) && template.details.length
-            ? template.details.map((row, idx) => createDetailRow({ ...row, id: row.id ?? `seed-${idx}` }))
+          Array.isArray(activeTemplate.details) && activeTemplate.details.length
+            ? activeTemplate.details.map((row, idx) => createDetailRow({ ...row, id: row.id ?? `seed-${idx}` }))
             : DEFAULT_CRDR_TEMPLATE.details,
       }
     }
     return DEFAULT_CRDR_TEMPLATE
-  }, [template])
+  }, [activeTemplate])
 
   const [form, setForm] = useState(seed)
   const [freightOptions, setFreightOptions] = useState([])
@@ -159,12 +165,14 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
 
   const normalizedPayload = useMemo(() => {
     const header = {
+      headerId: activeTemplate?.headerId ?? headerIdFromState ?? null,
       userName: (form.userName || '').trim(),
       freightType: (form.freightType || '').trim(),
       agent: toNumberOrZero(form.agent),
       agentName: (form.agentName || '').trim(),
       term: toNumberOrZero(form.term),
       details: (form.details || []).map((d) => ({
+        detailId: d.detailId ?? d.id ?? null,
         description: (d.description || '').trim(),
         debit: toNumberOrZero(d.debit),
         credit: toNumberOrZero(d.credit),
@@ -193,12 +201,14 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
     setSaving(true)
     try {
       const apiPayload = {
+        headerId: normalizedPayload.headerId ?? undefined,
         userName: normalizedPayload.userName,
         freightType: normalizedPayload.freightType,
         agent: normalizedPayload.agent,
         agentName: normalizedPayload.agentName,
         term: normalizedPayload.term,
         details: normalizedPayload.details.map((d) => ({
+          detailId: d.detailId ?? undefined,
           code: '',
           description: d.description,
           revenue: 0,
@@ -211,7 +221,13 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
         })),
       }
 
-      const response = await insertCrdrTemplate(apiPayload)
+      const shouldUpdate = Boolean(
+        (modeFromState && modeFromState === 'edit') || apiPayload.headerId
+      )
+
+      const response = shouldUpdate
+        ? await updateCrdrTemplate(apiPayload)
+        : await insertCrdrTemplate(apiPayload)
       if (response?.success === false) {
         throw new Error(response?.message || 'Failed to save CRDR template')
       }
@@ -244,37 +260,6 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
           <p className="eyebrow">CRDR TEMPLATE</p>
           <h2>Create CRDR Template</h2>
           <p>Define header metadata and detail lines, then save your template.</p>
-          <div className="hero-badges">
-            <span>Freight: {normalizedPayload.freightType || '—'}</span>
-            <span>Lines: {normalizedPayload.details?.length ?? 0}</span>
-            <span>Agent: {normalizedPayload.agentName || '—'}</span>
-          </div>
-        </div>
-
-        <div className="hero-status">
-          <ul className="progress-rail">
-            <li className="complete">
-              <span className="progress-bullet">1</span>
-              <div>
-                <p>Header</p>
-                <small>User, agent, freight type</small>
-              </div>
-            </li>
-            <li>
-              <span className="progress-bullet">2</span>
-              <div>
-                <p>Details</p>
-                <small>Codes, debit/credit, shares</small>
-              </div>
-            </li>
-            <li>
-              <span className="progress-bullet">3</span>
-              <div>
-                <p>Export / Save</p>
-                <small>Copy payload or wire API</small>
-              </div>
-            </li>
-          </ul>
         </div>
       </section>
 
@@ -283,7 +268,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
         {error && <div className="error-row">{error}</div>}
 
         <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-          <label className="field agent-name-field">
+          <label className="fiel">
             <span>Agent Name</span>
             <div className="ac-wrapper">
               <input

@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import "./ListInvoiceTemplate.css";
-import { getCrdrTemplateByAgentName } from "./api/ListCrdrTemplate";
+import { deleteCrdrTemplate, getCrdrTemplateByAgentName } from "./api/ListCrdrTemplate";
 
 const PAGE_SIZE = 10;
 
@@ -18,6 +18,26 @@ const describeRelativeTime = (moment) => {
   if (hours < 24) return `${hours}h ${suffix}`;
   const days = Math.floor(hours / 24);
   return `${days}d ${suffix}`;
+};
+
+const parseMaybeJson = (payload) => {
+  if (typeof payload !== "string") return payload;
+  try {
+    return JSON.parse(payload);
+  } catch {
+    return payload;
+  }
+};
+
+const getErrorMessage = (err, fallback) => {
+  const data = parseMaybeJson(err?.response?.data ?? err?.data);
+  if (typeof data === "string" && data.trim()) return data.trim();
+  if (data && typeof data === "object") {
+    const message = data.message || data.error || data.title || data.detail || data.msg;
+    if (typeof message === "string" && message.trim()) return message.trim();
+  }
+  if (typeof err?.message === "string" && err.message.trim()) return err.message;
+  return fallback;
 };
 
 function ListCrdrTemplates() {
@@ -52,7 +72,7 @@ function ListCrdrTemplates() {
       setPage(1);
       setExpandedHeaderId(null);
     } catch (err) {
-      setError(err?.message || "Failed to load CRDR templates");
+      setError(getErrorMessage(err, "Failed to load CRDR templates"));
       setRows([]);
       setLastQuery(trimmed);
       setPage(1);
@@ -119,6 +139,50 @@ function ListCrdrTemplates() {
     setExpandedHeaderId((prev) => (String(prev) === String(headerId) ? null : headerId));
   };
 
+  const handleEditTemplate = (row) => {
+    if (!row) return;
+    const template = {
+      userName: row.userName ?? "POM",
+      freightType: row.freightType ?? "",
+      agent: row.agent ?? 0,
+      agentName: row.agentName ?? "",
+      term: row.term ?? 0,
+      details: Array.isArray(row.details)
+        ? row.details.map((det) => ({
+            detailId: det?.detailId ?? null,
+            description: det?.description ?? "",
+            debit: det?.debit ?? 0,
+            credit: det?.credit ?? 0,
+          }))
+        : [],
+    };
+
+    const headerId = row.headerId ?? null;
+    navigate(`/crdr-templates/edit/${headerId ?? ""}`, {
+      state: { template, headerId },
+    });
+  };
+
+  const handleRemoveTemplate = async (row) => {
+    const id = row?.headerId;
+    if (!id) return;
+    const ok = window.confirm(`Remove CRDR template ${row?.headerId ?? ""}?`);
+    if (!ok) return;
+
+    setError(null);
+    try {
+      const resp = await deleteCrdrTemplate(id);
+      const payload = parseMaybeJson(resp);
+      if (payload?.success === false || payload?.data === false) {
+        throw new Error(payload?.message || "Failed to delete CRDR template");
+      }
+      setRows((prev) => prev.filter((item) => item?.headerId !== id));
+      if (payload?.message) setError(payload.message);
+    } catch (err) {
+      setError(getErrorMessage(err, "Failed to delete CRDR template"));
+    }
+  };
+
   return (
     <div className="templates-shell">
       <section className="panel template-hero">
@@ -137,33 +201,6 @@ function ListCrdrTemplates() {
           </p>
         </div>
 
-        <div className="hero-status">
-          <div className="status-card">
-            <span className={`status-dot ${loading ? "syncing" : "ready"}`} />
-            <div>
-              <strong>{loading ? "Syncing" : "Ready"}</strong>
-              <small>{loading ? "Fetching templates" : "Awaiting search"}</small>
-            </div>
-          </div>
-
-          <div className="metrics-grid" style={{ width: "100%" }}>
-            <div className="metric-card">
-              <p>Headers</p>
-              <h4>{stats.total}</h4>
-              <small>Templates returned</small>
-            </div>
-            <div className="metric-card">
-              <p>Details</p>
-              <h4>{stats.totalDetails}</h4>
-              <small>Total line items</small>
-            </div>
-            <div className="metric-card highlight">
-              <p>Top Freight</p>
-              <h4>{stats.topFreight}</h4>
-              <small>Most common freight type</small>
-            </div>
-          </div>
-        </div>
       </section>
 
       <section className="panel template-search">
@@ -278,13 +315,29 @@ function ListCrdrTemplates() {
                         <td>{row.term ?? "-"}</td>
                         <td>{details.length}</td>
                         <td style={{ textAlign: "right" }}>
-                          <button
-                            type="button"
-                            className="btn outline"
-                            onClick={() => toggleExpanded(row.headerId)}
-                          >
-                            {isOpen ? "Hide" : "View"}
-                          </button>
+                          <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
+                            <button
+                              type="button"
+                              className="btn outline"
+                              onClick={() => toggleExpanded(row.headerId)}
+                            >
+                              {isOpen ? "Hide" : "View"}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn outline"
+                              onClick={() => handleEditTemplate(row)}
+                            >
+                              Edit
+                            </button>
+                            <button
+                              type="button"
+                              className="btn danger"
+                              onClick={() => handleRemoveTemplate(row)}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
 

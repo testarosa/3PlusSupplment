@@ -61,7 +61,53 @@ export async function getCrdrById(crdrId) {
   }
 }
 
+export async function getCrdrByRefNumber(refNo) {
+  const trimmed = String(refNo ?? "").trim();
+  if (!trimmed) {
+    throw new Error("refNo is required");
+  }
+
+  const endpoint = buildInvoiceApiUrl("/Crdr/GetCRDRByRefNumber");
+
+  try {
+    const resp = await axios.get(endpoint, {
+      params: { refNo: trimmed },
+      headers: { accept: "text/plain" },
+      responseType: "text",
+    });
+
+    return parseMaybeJson(resp?.data);
+  } catch (err) {
+    console.warn("[getCrdrByRefNumber] error", err?.message || err);
+    throw err;
+  }
+}
+
+export async function saveCrdr(payload, { userId = "" } = {}) {
+  if (!payload || typeof payload !== "object") {
+    throw new Error("payload is required");
+  }
+
+  const endpoint = buildInvoiceApiUrl(
+    `/Crdr/SaveCrdr?userId=${encodeURIComponent(String(userId))}`
+  );
+
+  try {
+    const resp = await axios.post(endpoint, payload, {
+      headers: { accept: "text/plain", "Content-Type": "application/json" },
+      responseType: "text",
+    });
+
+    return parseMaybeJson(resp?.data);
+  } catch (err) {
+    console.warn("[saveCrdr] error", err?.message || err);
+    throw err;
+  }
+}
+
 export default {
   searchCrdrs,
   getCrdrById,
+  getCrdrByRefNumber,
+  saveCrdr,
 };
