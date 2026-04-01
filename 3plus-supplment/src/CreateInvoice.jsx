@@ -524,6 +524,13 @@ function CreateInvoice({
             row.fCustomerSName ?? row.customerShort ?? row.customerSName ?? ""
           ),
           customerCode: toTrimmedString(rawCode),
+          custRefNo: toTrimmedString(
+            row.fCustRefNo ??
+              row.custRefNo ??
+              row.customerRefNo ??
+              row.CustomerRefNo ??
+              ""
+          ),
           customerId: parsedCustomerId,
         };
       };
@@ -1279,7 +1286,7 @@ function CreateInvoice({
         invoiceDate: formatDateForAPI(invoiceDate),
         dueDate: formatDateForAPI(dueDate),
         invoiceAmount: invoiceAmount,
-        customerRefNo: selectedRef || "",
+        customerRefNo: (selectedMeta?.custRefNo || "").toString().trim(),
         userID: userIdForPayload || "",
         oiRates: oiRates,
       };
