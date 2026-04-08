@@ -1,6 +1,6 @@
-const DEFAULT_API_BASE_URL = 'http://api.e3pl.com/'
+//const DEFAULT_API_BASE_URL = 'http://api.e3pl.com/'
 
-//const DEFAULT_API_BASE_URL = 'http://192.168.20.151:5048/'
+const DEFAULT_API_BASE_URL = 'http://192.168.20.151:5048/'
 
 const pickEnvUrl = (value, fallback) =>
   typeof value === 'string' && value.trim().length ? value.trim() : fallback

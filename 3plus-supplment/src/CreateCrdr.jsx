@@ -89,6 +89,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 
 	const [agent, setAgent] = useState(initialData?.agent ?? "");
 	const [agentId, setAgentId] = useState(initialData?.agentId ?? null);
+	const [templateName, setTemplateName] = useState(initialData?.templateName ?? "");
 	const agentInputRef = useRef(null);
 	const agentDebounce = useRef(null);
 	const [agentAc, setAgentAc] = useState({
@@ -492,6 +493,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 
 				if (template.agentName) setAgent(template.agentName);
 				if (template.agent) setAgentId(template.agent);
+				if (template.name) setTemplateName(String(template.name));
 
 				if (template.term !== undefined && template.term !== null) {
 					const termValue = Number(template.term) || 0;
@@ -609,6 +611,17 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 				)}
 
 				<div className="form-grid">
+					<div className="field">
+						<label>Template Name</label>
+						<input
+							className="input-control"
+							type="text"
+							placeholder="Enter template name"
+							value={templateName}
+							onChange={(e) => setTemplateName(e.target.value)}
+						/>
+					</div>
+
 					<div className="field">
 						<label>Agent</label>
 						<div className="ac-wrap">

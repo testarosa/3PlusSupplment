@@ -16,6 +16,8 @@ const normalizeCrdrTemplateHeader = (header) => {
   return {
     headerId: header.headerId ?? header.HeaderId ?? header.id ?? header.Id,
     userName: header.userName ?? header.UserName ?? "",
+    templateName: header.templateName ?? header.TemplateName ?? header.name ?? header.Name ?? "",
+    name: header.name ?? header.Name ?? header.templateName ?? header.TemplateName ?? "",
     freightType: header.freightType ?? header.FreightType ?? "",
     agent: header.agent ?? header.Agent ?? null,
     agentName: header.agentName ?? header.AgentName ?? "",
@@ -36,6 +38,34 @@ const normalizeCrdrTemplateHeader = (header) => {
       : [],
   };
 };
+
+const buildCrdrTemplateQuery = ({ name, agentName, userName }) => {
+  const qp = new URLSearchParams();
+  qp.set("name", String(name ?? "").trim());
+  qp.set("agentName", String(agentName ?? "").trim());
+  qp.set("userName", String(userName ?? "").trim());
+  return qp.toString();
+};
+
+// GET /CrdrTemplate/GetTemplate?name=...&agentName=...&userName=...
+export async function getCrdrTemplate({ name, agentName, userName }) {
+  const query = buildCrdrTemplateQuery({ name, agentName, userName });
+  const endpoint = buildInvoiceApiUrl(`/CrdrTemplate/GetTemplate?${query}`);
+
+  try {
+    const resp = await axios.get(endpoint, {
+      headers: { accept: "text/plain, application/json" },
+    });
+
+    const parsed = parseMaybeJson(resp?.data);
+    const list = Array.isArray(parsed?.data) ? parsed.data : [];
+
+    return list.map(normalizeCrdrTemplateHeader).filter(Boolean);
+  } catch (err) {
+    console.warn("[getCrdrTemplate] error", err?.message || err);
+    throw err;
+  }
+}
 
 // GET /CrdrTemplate/GetByAgentName?agentName=...
 export async function getCrdrTemplateByAgentName(agentName) {
@@ -153,6 +183,7 @@ export async function deleteCrdrTemplate(headerId) {
 }
 
 export default {
+  getCrdrTemplate,
   getCrdrTemplateByAgentName,
   getCrdrTemplateByAgentId,
   insertCrdrTemplate,

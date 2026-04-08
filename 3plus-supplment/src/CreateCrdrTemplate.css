@@ -141,7 +141,7 @@
 }
 
 .crdr-template-builder .agent-name-field {
-  grid-column: 1 / -1;
+  grid-column: span 2;
 }
 
 .crdr-template-builder .agent-name-input {
@@ -310,6 +310,10 @@
 }
 
 @media (max-width: 720px) {
+  .crdr-template-builder .agent-name-field {
+    grid-column: auto;
+  }
+
   .crdr-template-builder .panel {
     padding: 1.1rem;
     border-radius: 18px;

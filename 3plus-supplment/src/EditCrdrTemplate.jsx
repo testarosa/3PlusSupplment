@@ -52,6 +52,8 @@ function EditCrdrTemplate({ template, onCancel }) {
 		return {
 			headerId: source.headerId ?? headerIdFromState ?? null,
 			userName: source.userName ?? "POM",
+			templateName:
+				source.templateName ?? source.name ?? source.Name ?? "",
 			freightType: source.freightType ?? "",
 			agent: source.agent ?? 0,
 			agentName: source.agentName ?? "",
@@ -124,10 +126,6 @@ function EditCrdrTemplate({ template, onCancel }) {
 			setError("User name is required.");
 			return;
 		}
-		if (!form.agentName) {
-			setError("Agent name is required.");
-			return;
-		}
 		if (!form.freightType) {
 			setError("Freight type is required.");
 			return;
@@ -138,6 +136,7 @@ function EditCrdrTemplate({ template, onCancel }) {
 			const payload = {
 				headerId: form.headerId,
 				userName: String(form.userName || "").trim(),
+				name: String(form.templateName || "").trim(),
 				freightType: String(form.freightType || "").trim(),
 				agent: toNumberOrZero(form.agent),
 				agentName: String(form.agentName || "").trim(),
@@ -213,6 +212,14 @@ function EditCrdrTemplate({ template, onCancel }) {
 						<input
 							value={form.freightType}
 							onChange={(e) => updateHeader("freightType", e.target.value)}
+						/>
+					</label>
+					<label className="field">
+						<span>Template Name</span>
+						<input
+							value={form.templateName ?? ""}
+							onChange={(e) => updateHeader("templateName", e.target.value)}
+							placeholder="Enter template name"
 						/>
 					</label>
 					<label className="field">

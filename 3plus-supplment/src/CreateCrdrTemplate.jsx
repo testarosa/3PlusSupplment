@@ -7,6 +7,7 @@ import { insertCrdrTemplate, updateCrdrTemplate } from './api/ListCrdrTemplate'
 
 const DEFAULT_CRDR_TEMPLATE = {
   userName: 'POM',
+  templateName: '',
   freightType: 'OI',
   agent: 0,
   agentName: '',
@@ -42,6 +43,11 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
       return {
         ...DEFAULT_CRDR_TEMPLATE,
         ...activeTemplate,
+        templateName:
+          activeTemplate.templateName ??
+          activeTemplate.name ??
+          activeTemplate.Name ??
+          '',
         details:
           Array.isArray(activeTemplate.details) && activeTemplate.details.length
             ? activeTemplate.details.map((row, idx) => createDetailRow({ ...row, id: row.id ?? `seed-${idx}` }))
@@ -167,6 +173,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
     const header = {
       headerId: activeTemplate?.headerId ?? headerIdFromState ?? null,
       userName: (form.userName || '').trim(),
+      name: (form.templateName || '').trim(),
       freightType: (form.freightType || '').trim(),
       agent: toNumberOrZero(form.agent),
       agentName: (form.agentName || '').trim(),
@@ -189,10 +196,6 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
       setError('User name is required.')
       return
     }
-    if (!normalizedPayload.agentName) {
-      setError('Agent name is required.')
-      return
-    }
     if (!normalizedPayload.freightType) {
       setError('Freight type is required.')
       return
@@ -203,6 +206,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
       const apiPayload = {
         headerId: normalizedPayload.headerId ?? undefined,
         userName: normalizedPayload.userName,
+        name: normalizedPayload.name,
         freightType: normalizedPayload.freightType,
         agent: normalizedPayload.agent,
         agentName: normalizedPayload.agentName,
@@ -268,7 +272,16 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
         {error && <div className="error-row">{error}</div>}
 
         <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
-          <label className="fiel">
+          <label className="field">
+            <span>Template Name</span>
+            <input
+              value={form.templateName ?? ''}
+              onChange={(e) => updateHeader('templateName', e.target.value)}
+              placeholder="Enter template name"
+            />
+          </label>
+
+          <label className="field agent-name-field">
             <span>Agent Name</span>
             <div className="ac-wrapper">
               <input

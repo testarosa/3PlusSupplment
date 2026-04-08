@@ -1,7 +1,9 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import "./ListInvoiceTemplate.css";
-import { deleteCrdrTemplate, getCrdrTemplateByAgentName } from "./api/ListCrdrTemplate";
+import { deleteCrdrTemplate, getCrdrTemplate } from "./api/ListCrdrTemplate";
+import { selectAuth } from "./store/slices/authSlice";
 
 const PAGE_SIZE = 10;
 
@@ -42,8 +44,10 @@ const getErrorMessage = (err, fallback) => {
 
 function ListCrdrTemplates() {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState("");
-  const [lastQuery, setLastQuery] = useState("");
+  const { user } = useSelector(selectAuth);
+  const [searchName, setSearchName] = useState("");
+  const [searchAgentName, setSearchAgentName] = useState("");
+  const [lastQuery, setLastQuery] = useState(null);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
@@ -51,12 +55,25 @@ function ListCrdrTemplates() {
   const [lastRefresh, setLastRefresh] = useState(null);
   const [page, setPage] = useState(1);
 
-  const loadTemplates = async (agentName) => {
-    const trimmed = (agentName || "").trim();
-    if (!trimmed) {
-      setError("Enter an agent name to search.");
+  const loginUserName =
+    user?.userId ??
+    user?.userName ??
+    user?.username ??
+    user?.name ??
+    user?.F_UserName ??
+    "";
+
+  const loadTemplates = async ({ name, agentName, userName }) => {
+    const nextQuery = {
+      name: String(name ?? "").trim(),
+      agentName: String(agentName ?? "").trim(),
+      userName: String(userName ?? "").trim(),
+    };
+
+    if (!nextQuery.userName) {
+      setError("Sign-in user is required to search.");
       setRows([]);
-      setLastQuery("");
+      setLastQuery(null);
       setPage(1);
       return;
     }
@@ -65,16 +82,16 @@ function ListCrdrTemplates() {
     setError(null);
 
     try {
-      const list = await getCrdrTemplateByAgentName(trimmed);
+      const list = await getCrdrTemplate(nextQuery);
       setRows(Array.isArray(list) ? list : []);
-      setLastQuery(trimmed);
+      setLastQuery(nextQuery);
       setLastRefresh(new Date());
       setPage(1);
       setExpandedHeaderId(null);
     } catch (err) {
       setError(getErrorMessage(err, "Failed to load CRDR templates"));
       setRows([]);
-      setLastQuery(trimmed);
+      setLastQuery(nextQuery);
       setPage(1);
     } finally {
       setLoading(false);
@@ -83,7 +100,11 @@ function ListCrdrTemplates() {
 
   const doSearch = (e) => {
     if (e && e.preventDefault) e.preventDefault();
-    loadTemplates(searchTerm);
+    loadTemplates({
+      name: searchName,
+      agentName: searchAgentName,
+      userName: loginUserName,
+    });
   };
 
   const stats = useMemo(() => {
@@ -143,6 +164,7 @@ function ListCrdrTemplates() {
     if (!row) return;
     const template = {
       userName: row.userName ?? "POM",
+      templateName: row.name ?? row.templateName ?? "",
       freightType: row.freightType ?? "",
       agent: row.agent ?? 0,
       agentName: row.agentName ?? "",
@@ -189,11 +211,17 @@ function ListCrdrTemplates() {
         <div className="hero-text">
           <p className="eyebrow">CRDR TEMPLATE</p>
           <h2>CRDR Templates</h2>
-          <p>Search CRDR templates by agent name and review header / detail lines.</p>
+          <p>Search CRDR templates by sign-in user with optional template and agent filters.</p>
           <p className="last-query">
             {lastQuery ? (
               <>
-                Last query: <strong>{lastQuery}</strong> • refreshed {describeRelativeTime(lastRefresh)}
+                Last query:
+                {" "}
+                <strong>
+                  name={lastQuery.name || "-"}, agent={lastQuery.agentName || "-"}, user={lastQuery.userName || "-"}
+                </strong>
+                {" "}
+                • refreshed {describeRelativeTime(lastRefresh)}
               </>
             ) : (
               "Ready to search"
@@ -206,12 +234,21 @@ function ListCrdrTemplates() {
       <section className="panel template-search">
         <form className="search-form" onSubmit={doSearch}>
           <label className="field">
+            <span>Template name</span>
+            <input
+              className="search-input"
+              placeholder="Try TEST1"
+              value={searchName}
+              onChange={(e) => setSearchName(e.target.value)}
+            />
+          </label>
+          <label className="field">
             <span>Agent name</span>
             <input
               className="search-input"
-              placeholder="Try TEST, POM, ..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Try TEST"
+              value={searchAgentName}
+              onChange={(e) => setSearchAgentName(e.target.value)}
             />
           </label>
           <div className="search-actions">
@@ -284,14 +321,14 @@ function ListCrdrTemplates() {
           {error && <div className="error-row">{error}</div>}
 
           {!loading && !error && rows.length === 0 && (
-            <div className="empty-row">No results yet. Search by agent name.</div>
+            <div className="empty-row">No results yet. Search by template or agent (both optional).</div>
           )}
 
           {!loading && !error && rows.length > 0 && (
             <table className="templates-table">
               <thead>
                 <tr>
-                  <th>Header ID</th>
+                  <th>Template</th>
                   <th>User</th>
                   <th>Agent</th>
                   <th>Freight</th>
@@ -306,9 +343,9 @@ function ListCrdrTemplates() {
                   const details = Array.isArray(row.details) ? row.details : [];
 
                   return (
-                    <React.Fragment key={row.headerId ?? `${row.agentName}-${row.userName}`}> 
+                    <React.Fragment key={row.headerId ?? `${row.name}-${row.agentName}-${row.userName}`}> 
                       <tr>
-                        <td>{row.headerId ?? "-"}</td>
+                        <td>{row.name || row.templateName || "-"}</td>
                         <td>{row.userName || "-"}</td>
                         <td>{row.agentName || "-"}</td>
                         <td>{row.freightType || "-"}</td>
