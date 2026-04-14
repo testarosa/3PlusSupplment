@@ -61,14 +61,13 @@ export async function getCrdrById(crdrId) {
   }
 }
 
+//reference number
 export async function getCrdrByRefNumber(refNo) {
   const trimmed = String(refNo ?? "").trim();
   if (!trimmed) {
     throw new Error("refNo is required");
   }
-
   const endpoint = buildInvoiceApiUrl("/Crdr/GetCRDRByRefNumber");
-
   try {
     const resp = await axios.get(endpoint, {
       params: { refNo: trimmed },

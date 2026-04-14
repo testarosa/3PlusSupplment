@@ -82,7 +82,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		"";
 
 	const parseDate = (value) => {
-		if (!value) return null;
+		if (!value) return null;k
 		const date = value instanceof Date ? value : new Date(value);
 		return Number.isNaN(date.getTime()) ? null : date;
 	};
@@ -438,7 +438,6 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 
 		setRefLookupError(null);
 		setRefSearching(true);
-
 		try {
 			const response = await getCrdrByRefNumber(query);
 			const payload = response?.data ?? response;
@@ -453,6 +452,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 
 			const list = [mbl, ...hbls].filter(Boolean);
 			const preferredBl = hbls[0] || mbl || "";
+
 			setBlList(list);
 			setSelectedBL(preferredBl);
 
@@ -493,7 +493,9 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 
 				if (template.agentName) setAgent(template.agentName);
 				if (template.agent) setAgentId(template.agent);
-				if (template.name) setTemplateName(String(template.name));
+				const resolvedTemplateName =
+					template.name ?? template.templateName ?? template.userName ?? "";
+				setTemplateName(String(resolvedTemplateName));
 
 				if (template.term !== undefined && template.term !== null) {
 					const termValue = Number(template.term) || 0;
