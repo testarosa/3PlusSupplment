@@ -26,6 +26,17 @@ const createLine = (overrides = {}) => ({
 	credit: overrides.credit ?? 0,
 });
 
+const getTemplateOptionKey = (template, fallback = "") => {
+	if (!template || typeof template !== "object") return String(fallback);
+	return String(
+		template.headerId ??
+			template.HeaderId ??
+			template.name ??
+			template.templateName ??
+			fallback
+	);
+};
+
 const parseMaybeJson = (payload) => {
 	if (typeof payload !== "string") return payload;
 	try {
@@ -90,6 +101,10 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 	const [agent, setAgent] = useState(initialData?.agent ?? "");
 	const [agentId, setAgentId] = useState(initialData?.agentId ?? null);
 	const [templateName, setTemplateName] = useState(initialData?.templateName ?? "");
+	const [templateKey, setTemplateKey] = useState(
+		initialData?.templateHeaderId ?? initialData?.headerId ?? initialData?.templateName ?? ""
+	);
+	const [templateOptions, setTemplateOptions] = useState([]);
 	const agentInputRef = useRef(null);
 	const agentDebounce = useRef(null);
 	const [agentAc, setAgentAc] = useState({
@@ -178,6 +193,19 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			pending: Math.max(items.length - ready, 0),
 		};
 	}, [items]);
+
+	const resetCrdrForm = useCallback(() => {
+		setAgent("");
+		setAgentId(null);
+		setTemplateName("");
+		setTemplateKey("");
+		setTemplateOptions([]);
+		setTemplateError(null);
+		setNetTerm("");
+		setDueDate(null);
+		setCrdrNumber("");
+		setItems([createLine({ id: "seed-0" })]);
+	}, []);
 
 	const internalCancel = () => {
 		if (typeof onCancel === "function") return onCancel();
@@ -371,12 +399,18 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		if (!company) return;
 		setAgent(company.companyName ?? "");
 		setAgentId(company.companyId ?? null);
+		setTemplateOptions([]);
+		setTemplateKey("");
+		setTemplateName("");
 		setAgentAc({ list: [], index: -1, visible: false, loading: false, query: "" });
 	};
 
 	const handleAgentChange = (value) => {
 		setAgent(value);
 		setAgentId(null);
+		setTemplateOptions([]);
+		setTemplateKey("");
+		setTemplateName("");
 
 		const query = String(value ?? "").trim();
 		if (agentDebounce.current) {
@@ -422,7 +456,62 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		setNetTerm("");
 		setDueDate(null);
 		setCrdrNumber("");
+		setTemplateOptions([]);
+		setTemplateKey("");
+		setTemplateName("");
 		setItems([createLine({ id: "seed-0" })]);
+	};
+
+	const applyTemplate = useCallback(
+		(template) => {
+			if (!template || typeof template !== "object") return;
+
+			const resolvedTemplateName =
+				template.name ?? template.templateName ?? template.userName ?? "";
+			setTemplateName(String(resolvedTemplateName));
+			setTemplateKey(getTemplateOptionKey(template));
+
+			if (template.agentName) setAgent(template.agentName);
+			if (template.agent) setAgentId(template.agent);
+
+			if (template.term !== undefined && template.term !== null) {
+				const termValue = Number(template.term) || 0;
+				setNetTerm(termValue);
+				const baseDate =
+					invoiceDate instanceof Date
+						? invoiceDate
+						: new Date(invoiceDate || Date.now());
+				const due = new Date(baseDate);
+				due.setDate(due.getDate() + termValue);
+				setDueDate(due);
+			}
+
+			if (Array.isArray(template.details) && template.details.length) {
+				setItems(
+					template.details.map((row, idx) =>
+						createLine({
+							id: row.detailId ?? `tpl-${idx}`,
+							description: row.description ?? "",
+							debit: row.debit ?? 0,
+							credit: row.credit ?? 0,
+						})
+					)
+				);
+			}
+		},
+		[invoiceDate]
+	);
+
+	const handleTemplateChange = (value) => {
+		setTemplateKey(value);
+		const selectedTemplate = templateOptions.find(
+			(template, idx) => getTemplateOptionKey(template, idx) === value
+		);
+		if (!selectedTemplate) {
+			setTemplateName("");
+			return;
+		}
+		applyTemplate(selectedTemplate);
 	};
 
 	const doRefSearch = async (event) => {
@@ -433,6 +522,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			setBlList([]);
 			setSelectedBL("");
 			setRefPayload(null);
+			resetCrdrForm();
 			return;
 		}
 
@@ -441,9 +531,19 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		try {
 			const response = await getCrdrByRefNumber(query);
 			const payload = response?.data ?? response;
-			setRefPayload(payload || null);
 			const master = payload?.tOIMMainDto ?? null;
 			const houses = Array.isArray(payload?.tOIHMainDtos) ? payload.tOIHMainDtos : [];
+
+			if (!master && !houses.length) {
+				setBlList([]);
+				setSelectedBL("");
+				setRefPayload(null);
+				resetCrdrForm();
+				setRefLookupError("CRDR not found.");
+				return;
+			}
+
+			setRefPayload(payload || null);
 
 			const mbl = (master?.fMblno || "").toString().trim();
 			const hbls = houses
@@ -469,6 +569,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			setBlList([]);
 			setSelectedBL("");
 			setRefPayload(null);
+			resetCrdrForm();
 			setRefLookupError(getErrorMessage(err, "Unable to load CRDR details"));
 		} finally {
 			setRefSearching(false);
@@ -485,44 +586,33 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			try {
 				const templates = await getCrdrTemplateByAgentId(agentId);
 				if (!active) return;
-				const template = Array.isArray(templates) && templates.length ? templates[0] : null;
+				const nextTemplates = Array.isArray(templates) ? templates : [];
+				setTemplateOptions(nextTemplates);
+				const template = nextTemplates.length
+					? nextTemplates.find(
+						(item, idx) => getTemplateOptionKey(item, idx) === String(templateKey)
+					) ??
+					  nextTemplates.find(
+						(item) =>
+							String(item?.name ?? item?.templateName ?? "") === String(templateName)
+					  ) ??
+					  nextTemplates[0]
+					: null;
 				if (!template) {
+					setTemplateKey("");
+					setTemplateName("");
+					setItems([createLine({ id: "seed-0" })]);
 					setTemplateError("No CRDR template found for this agent.");
 					return;
 				}
 
-				if (template.agentName) setAgent(template.agentName);
-				if (template.agent) setAgentId(template.agent);
-				const resolvedTemplateName =
-					template.name ?? template.templateName ?? template.userName ?? "";
-				setTemplateName(String(resolvedTemplateName));
-
-				if (template.term !== undefined && template.term !== null) {
-					const termValue = Number(template.term) || 0;
-					setNetTerm(termValue);
-					const baseDate =
-						invoiceDate instanceof Date
-							? invoiceDate
-							: new Date(invoiceDate || Date.now());
-					const due = new Date(baseDate);
-					due.setDate(due.getDate() + termValue);
-					setDueDate(due);
-				}
-
-				if (Array.isArray(template.details) && template.details.length) {
-					setItems(
-						template.details.map((row, idx) =>
-							createLine({
-								id: row.detailId ?? `tpl-${idx}`,
-								description: row.description ?? "",
-								debit: row.debit ?? 0,
-								credit: row.credit ?? 0,
-							})
-						)
-					);
-				}
+				applyTemplate(template);
 			} catch (err) {
 				if (!active) return;
+				setTemplateOptions([]);
+				setTemplateKey("");
+				setTemplateName("");
+				setItems([createLine({ id: "seed-0" })]);
 				setTemplateError(
 					getErrorMessage(err, "Unable to load CRDR template for this agent.")
 				);
@@ -534,7 +624,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		return () => {
 			active = false;
 		};
-	}, [selectedBL, agentId, invoiceDate]);
+	}, [selectedBL, agentId, templateKey, templateName, applyTemplate]);
 
 	const isSaveDisabled =
 		saveLoading || !selectedBL || !selectedBL.toString().trim();
@@ -615,13 +705,30 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 				<div className="form-grid">
 					<div className="field">
 						<label>Template Name</label>
-						<input
+						<select
 							className="input-control"
-							type="text"
-							placeholder="Enter template name"
-							value={templateName}
-							onChange={(e) => setTemplateName(e.target.value)}
-						/>
+							value={templateKey}
+							onChange={(e) => handleTemplateChange(e.target.value)}
+							disabled={templateLoading || !templateOptions.length}
+						>
+							<option value="">
+								{templateLoading
+									? "Loading templates..."
+									: templateOptions.length
+										? "Select template"
+										: "No templates available"}
+							</option>
+							{templateOptions.map((template, idx) => {
+								const optionKey = getTemplateOptionKey(template, idx);
+								const optionLabel =
+									template?.name ?? template?.templateName ?? `Template ${idx + 1}`;
+								return (
+									<option key={optionKey} value={optionKey}>
+										{optionLabel}
+									</option>
+								);
+							})}
+						</select>
 					</div>
 
 					<div className="field">
