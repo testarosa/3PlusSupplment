@@ -23,6 +23,7 @@
     radial-gradient(120% 120% at 100% 0%, rgba(255, 125, 0, 0.16), transparent 55%),
     linear-gradient(135deg, rgba(255, 255, 255, 0.90) 0%, rgba(240, 251, 255, 0.82) 55%, rgba(253, 244, 236, 0.82) 100%);
   border-radius: 22px;
+  margin-top: 30px;
   border: 1px solid var(--border);
   padding: 1.5rem;
   box-shadow: 0 24px 45px rgba(4, 18, 31, 0.08);
@@ -139,7 +140,7 @@
 
 .search-form {
   display: grid;
-  grid-template-columns: repeat(3, minmax(180px, 1fr)) auto;
+  grid-template-columns: minmax(220px, 1fr) auto;
   gap: 1rem;
   align-items: end;
 }

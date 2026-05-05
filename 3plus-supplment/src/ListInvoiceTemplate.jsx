@@ -36,7 +36,11 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
   const rows = useSelector(selectAllTemplates)
   const loading = useSelector(selectLoading)
   const error = useSelector(selectError)
-  const [searchTerm, setSearchTerm] = useState('')
+  const [filters, setFilters] = useState({
+    name: '',
+    freightType: '',
+    billToName: '',
+  })
   const [lastQuery, setLastQuery] = useState('')
   const [detailLoadingId, setDetailLoadingId] = useState(null)
   const [deleteLoadingId, setDeleteLoadingId] = useState(null)
@@ -49,10 +53,24 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
     }
   }, [initialTemplates, dispatch])
 
-  const loadTemplates = async (customerName) => {
-    const trimmed = (customerName || '').trim()
-    if (!trimmed) {
-      dispatch(setError('Enter a customer name to search.'))
+  const describeFilters = (values) => {
+    const parts = [
+      values.name ? `name "${values.name}"` : '',
+      values.freightType ? `freight type "${values.freightType}"` : '',
+      values.billToName ? `bill-to "${values.billToName}"` : '',
+    ].filter(Boolean)
+    return parts.join(', ')
+  }
+
+  const loadTemplates = async (searchFilters) => {
+    const normalizedFilters = {
+      name: (searchFilters?.name || '').trim(),
+      freightType: (searchFilters?.freightType || '').trim(),
+      billToName: (searchFilters?.billToName || '').trim(),
+    }
+    const hasSearchValue = Object.values(normalizedFilters).some(Boolean)
+    if (!hasSearchValue) {
+      dispatch(setError('Enter a template name, freight type, or bill-to name to search.'))
       dispatch(setTemplates([]))
       setLastQuery('')
       setPage(1)
@@ -61,15 +79,15 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
     dispatch(setLoading(true))
     dispatch(setError(null))
     try {
-      const result = await fetchInvoiceTemplates(trimmed)
+      const result = await fetchInvoiceTemplates(normalizedFilters)
       dispatch(setTemplates(result.list))
-      setLastQuery(trimmed)
+      setLastQuery(describeFilters(normalizedFilters))
       setLastRefresh(new Date())
       setPage(1)
     } catch (err) {
       dispatch(setError(err?.message || 'Failed to load invoice templates'))
       dispatch(setTemplates([]))
-      setLastQuery(trimmed)
+      setLastQuery(describeFilters(normalizedFilters))
       setPage(1)
     } finally {
       dispatch(setLoading(false))
@@ -79,7 +97,11 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
   const doSearch = (e) => {
     if (e && e.preventDefault) e.preventDefault()
     setPage(1)
-    loadTemplates(searchTerm)
+    loadTemplates(filters)
+  }
+
+  const updateFilter = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value }))
   }
 
 
@@ -203,12 +225,35 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
       <section className="panel template-search">
         <form className="search-form" onSubmit={doSearch}>
           <label className="field">
-            <span>Customer name</span>
+            <span>Template name</span>
             <input
               className="search-input"
-              placeholder="Try HYUNDAI, ABC Logistics..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Try crunchy..."
+              value={filters.name}
+              onChange={(e) => updateFilter('name', e.target.value)}
+            />
+          </label>
+          <label className="field">
+            <span>Freight type</span>
+            <select
+              className="search-input"
+              value={filters.freightType}
+              onChange={(e) => updateFilter('freightType', e.target.value)}
+            >
+              <option value="">Any freight type</option>
+              <option value="OI">OI</option>
+              <option value="OO">OO</option>
+              <option value="AI">AI</option>
+              <option value="AO">AO</option>
+            </select>
+          </label>
+          <label className="field">
+            <span>Bill To Name</span>
+            <input
+              className="search-input"
+              placeholder="Try crunchy..."
+              value={filters.billToName}
+              onChange={(e) => updateFilter('billToName', e.target.value)}
             />
           </label>
           <div className="search-actions">
@@ -302,12 +347,12 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
               )}
               {!loading && !error && rows.length === 0 && lastQuery && (
                 <tr>
-                  <td colSpan={5} className="empty-row">No templates found for "{lastQuery}".</td>
+                  <td colSpan={5} className="empty-row">No templates found for {lastQuery}.</td>
                 </tr>
               )}
               {!loading && !error && !lastQuery && rows.length === 0 && (
                 <tr>
-                  <td colSpan={5} className="empty-row">Enter a customer name to load templates.</td>
+                  <td colSpan={5} className="empty-row">Enter search criteria to load templates.</td>
                 </tr>
               )}
               {!loading && !error && pagedRows.map((row) => (

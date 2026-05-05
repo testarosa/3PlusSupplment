@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import "./ListInvoiceTemplate.css";
+import "./ListCrdrTemplates.css";
 import { deleteCrdrTemplate, getCrdrTemplate } from "./api/ListCrdrTemplate";
 import { selectAuth } from "./store/slices/authSlice";
 
@@ -210,29 +210,13 @@ function ListCrdrTemplates() {
       <section className="panel template-hero">
         <div className="hero-text">
           <p className="eyebrow">CRDR TEMPLATE</p>
-          <h2>CRDR Templates</h2>
-          <p>Search CRDR templates by sign-in user with optional template and agent filters.</p>
-          <p className="last-query">
-            {lastQuery ? (
-              <>
-                Last query:
-                {" "}
-                <strong>
-                  name={lastQuery.name || "-"}, agent={lastQuery.agentName || "-"}, user={lastQuery.userName || "-"}
-                </strong>
-                {" "}
-                • refreshed {describeRelativeTime(lastRefresh)}
-              </>
-            ) : (
-              "Ready to search"
-            )}
-          </p>
+          <h3>CRDR Templates</h3>
         </div>
 
       </section>
 
       <section className="panel template-search">
-        <form className="search-form" onSubmit={doSearch}>
+        <form className="search-form crdr-search-row" onSubmit={doSearch}>
           <label className="field">
             <span>Template name</span>
             <input
@@ -251,19 +235,17 @@ function ListCrdrTemplates() {
               onChange={(e) => setSearchAgentName(e.target.value)}
             />
           </label>
-          <div className="search-actions">
-            <button type="submit" className="btn primary" disabled={loading}>
-              {loading ? "Searching…" : "Search CRDR templates"}
-            </button>
-            <button
-              type="button"
-              className="btn outline"
-              onClick={() => navigate("/crdr-templates/create")}
-              disabled={loading}
-            >
-              New CRDR Template
-            </button>
-          </div>
+          <button type="submit" className="btn primary crdr-search-btn" disabled={loading}>
+            {loading ? "Searching…" : "Search CRDR templates"}
+          </button>
+          <button
+            type="button"
+            className="btn outline crdr-search-btn"
+            onClick={() => navigate("/crdr-templates/create")}
+            disabled={loading}
+          >
+            New CRDR Template
+          </button>
         </form>
       </section>
 

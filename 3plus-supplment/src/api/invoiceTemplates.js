@@ -58,17 +58,28 @@ export async function updateInvoiceTemplate(id, payload) {
   }
 }
 
-// GET /api/InvoiceTemplates?customerName=...
-export async function fetchInvoiceTemplates(customerName = "") {
+// GET /api/InvoiceTemplates?name=...&freightType=...&billToName=...
+export async function fetchInvoiceTemplates(filters = "") {
+  const normalizedFilters =
+    typeof filters === "string" ? { billToName: filters, name: filters } : filters || {};
   const params = new URLSearchParams();
-  if (customerName) params.set("customerName", customerName);
+  const name = (normalizedFilters.name || "").trim();
+  const freightType = (normalizedFilters.freightType || "").trim();
+  const billToName = (normalizedFilters.billToName || "").trim();
+
+  if (name) params.set("name", name);
+  if (freightType) params.set("freightType", freightType);
+  if (billToName) params.set("billToName", billToName);
+
   const query = params.toString() ? `?${params.toString()}` : "";
   try {
     const res = await api.get(`${TEMPLATES_PATH}${query}`, {
       headers: { accept: "text/plain" },
     });
     const payload = res?.data;
-    const list = Array.isArray(payload?.data) ? payload.data : [];
+    const list = Array.isArray(payload?.data)
+      ? payload.data.map(normalizeTemplate).filter(Boolean)
+      : [];
     return { list, raw: payload };
   } catch (err) {
     console.warn("[fetchInvoiceTemplates] error", err?.message || err);

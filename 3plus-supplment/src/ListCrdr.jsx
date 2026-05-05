@@ -192,18 +192,13 @@ function ListCrdr() {
 
   return (
     <div className="crdr-list-page">
+
       <section className="panel invoice-hero">
         <div className="hero-copy">
-          <p className="eyebrow"></p>
-          <h3>Search CRDR</h3>
-          <p style={{ marginTop: "0.35rem", opacity: 0.8 }}>
-            {meta?.message || "Search CRDRs by number, agent, or date range."}
-          </p>
-          <p className="last-query">
-            {lastRefresh ? `Refreshed ${describeRelativeTime(lastRefresh)}` : "Ready to search"}
-          </p>
+          <p className="eyebrow" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.78rem', color: '#64748b', margin: 0 }}>CRDR</p>
+          <h3>CRDR List</h3>
+          <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Search and manage credit / debit records.</p>
         </div>
-
       </section>
 
       <section className="panel filters-panel">
@@ -258,9 +253,16 @@ function ListCrdr() {
             />
           </label>
 
-          <div className="form-actions" style={{ display: "flex", gap: "0.5rem", height: "3rem" }}>
+          <div className="form-actions" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
             <button type="submit" className="btn primary" disabled={loading}>
               {loading ? "Searching…" : "Search"}
+            </button>
+            <button
+              type="button"
+              className="btn primary"
+              onClick={() => navigate("/crdr/create")}
+            >
+              Create
             </button>
           </div>
         </form>
@@ -276,13 +278,7 @@ function ListCrdr() {
             </p>
           </div>
           <div className="search-actions" aria-label="CRDR actions" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => navigate("/crdr/create")}
-            >
-              Create
-            </button>
+
             {rows.length > 0 && (
               <div className="search-actions" aria-label="CRDR pages">
                 <button

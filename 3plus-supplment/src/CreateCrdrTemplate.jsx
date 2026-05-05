@@ -1,17 +1,20 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
+import { useSelector } from 'react-redux'
+import { selectAuth } from './store/slices/authSlice'
 import './CreateCrdrTemplate.css'
 import { getFreightTypes } from './api/freightTypes'
 import { searchAgentCompaniesByName } from './api/agentCompanies'
 import { insertCrdrTemplate, updateCrdrTemplate } from './api/ListCrdrTemplate'
 
 const DEFAULT_CRDR_TEMPLATE = {
-  userName: 'POM',
+  userName: '',
   templateName: '',
   freightType: 'OI',
   agent: 0,
   agentName: '',
   term: 0,
+  isDefault: false,
   details: [
     {id: 'seed-0', description: '', debit: 0, credit: 0},
   ],
@@ -33,6 +36,7 @@ const createDetailRow = (overrides = {}) => ({
 function CreateCrdrTemplate({ template, onSave, onCancel }) {
   const navigate = useNavigate()
   const location = useLocation()
+  const { user: currentUser } = useSelector(selectAuth)
   const templateFromState = location?.state?.template
   const headerIdFromState = location?.state?.headerId
   const modeFromState = location?.state?.mode
@@ -48,6 +52,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
           activeTemplate.name ??
           activeTemplate.Name ??
           '',
+        isDefault: activeTemplate.isDefault ?? false,
         details:
           Array.isArray(activeTemplate.details) && activeTemplate.details.length
             ? activeTemplate.details.map((row, idx) => createDetailRow({ ...row, id: row.id ?? `seed-${idx}` }))
@@ -178,6 +183,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
       agent: toNumberOrZero(form.agent),
       agentName: (form.agentName || '').trim(),
       term: toNumberOrZero(form.term),
+      isDefault: Boolean(form.isDefault),
       details: (form.details || []).map((d) => ({
         detailId: d.detailId ?? d.id ?? null,
         description: (d.description || '').trim(),
@@ -192,7 +198,8 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
   const submit = async () => {
     setError(null)
 
-    if (!normalizedPayload.userName) {
+    const userNameForApi = currentUser?.userId ?? currentUser?.userName ?? ''
+    if (!userNameForApi) {
       setError('User name is required.')
       return
     }
@@ -205,12 +212,13 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
     try {
       const apiPayload = {
         headerId: normalizedPayload.headerId ?? undefined,
-        userName: normalizedPayload.userName,
+        userName: userNameForApi,
         name: normalizedPayload.name,
         freightType: normalizedPayload.freightType,
         agent: normalizedPayload.agent,
         agentName: normalizedPayload.agentName,
         term: normalizedPayload.term,
+        isDefault: normalizedPayload.isDefault,
         details: normalizedPayload.details.map((d) => ({
           detailId: d.detailId ?? undefined,
           code: '',
@@ -271,7 +279,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
         <h3 style={{ marginTop: 0 }}>Header</h3>
         {error && <div className="error-row">{error}</div>}
 
-        <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem' }}>
+        <div className="form-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem' }}>
           <label className="field">
             <span>Template Name</span>
             <input
@@ -281,7 +289,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
             />
           </label>
 
-          <label className="field agent-name-field">
+          <label className="field field-agent">
             <span>Agent Name</span>
             <div className="ac-wrapper">
               <input
@@ -356,7 +364,7 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
               )}
             </div>
           </label>
-          
+
           <label className="field">
             <span>Term</span>
             <input
@@ -380,6 +388,15 @@ function CreateCrdrTemplate({ template, onSave, onCancel }) {
             ) : (
               <input value={form.freightType} onChange={(e) => updateHeader('freightType', e.target.value)} />
             )}
+          </label>
+
+          <label className="field field-checkbox">
+            <input
+              type="checkbox"
+              checked={Boolean(form.isDefault)}
+              onChange={(e) => updateHeader('isDefault', e.target.checked)}
+            />
+            <span>Default</span>
           </label>
         </div>
       </section>
