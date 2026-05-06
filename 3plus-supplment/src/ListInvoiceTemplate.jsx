@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useDispatch, useSelector } from 'react-redux'
 import './ListInvoiceTemplate.css'
 import { fetchInvoiceTemplates, fetchInvoiceTemplateById, deleteInvoiceTemplate } from './api/invoiceTemplates'
+import { getFreightTypes } from './api/freightTypes'
 import {
   setTemplates,
   setLoading,
@@ -46,6 +47,20 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
   const [deleteLoadingId, setDeleteLoadingId] = useState(null)
   const [lastRefresh, setLastRefresh] = useState(null)
   const [page, setPage] = useState(1)
+  const [freightOptions, setFreightOptions] = useState([])
+
+  useEffect(() => {
+    let mounted = true
+    ;(async () => {
+      try {
+        const list = await getFreightTypes()
+        if (mounted) setFreightOptions(list)
+      } catch (err) {
+        console.warn('Failed to load freight types', err)
+      }
+    })()
+    return () => { mounted = false }
+  }, [])
 
   useEffect(() => {
     if (initialTemplates && initialTemplates.length) {
@@ -241,10 +256,15 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
               onChange={(e) => updateFilter('freightType', e.target.value)}
             >
               <option value="">Any freight type</option>
-              <option value="OI">OI</option>
-              <option value="OO">OO</option>
-              <option value="AI">AI</option>
-              <option value="AO">AO</option>
+              {freightOptions.map((opt) => {
+                const code = opt?.code ?? opt?.value ?? ''
+                const label = opt?.value ?? opt?.code ?? ''
+                return (
+                  <option key={opt?.id ?? code} value={code}>
+                    {label}
+                  </option>
+                )
+              })}
             </select>
           </label>
           <label className="field">

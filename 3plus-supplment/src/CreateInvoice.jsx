@@ -4,7 +4,7 @@ import { useSelector } from "react-redux";
 import "./CreateInvoice.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
+import { fetchInvoiceTemplates, fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
 import { getInvoiceByRef, saveInvoice } from "./api/invoices";
 import { getCustomersByName } from "./api/customers";
 import { getBillingCodes } from "./api/billingCodes";
@@ -265,7 +265,7 @@ function CreateInvoice({
   const [invoiceNumber, setInvoiceNumber] = useState(
     initialData?.invoiceNo ?? initialData?.invoiceNumber ?? ""
   );
-  // Ref/search state (re-added per request)
+  // Ref state (re-added per request)
   const [refSearchTerm, setRefSearchTerm] = useState(initialData?.ref ?? "");
   const [selectedRef, setSelectedRef] = useState(initialData?.ref ?? "");
   const [refLookupError, setRefLookupError] = useState(null);
@@ -273,6 +273,29 @@ function CreateInvoice({
 
   // After a ref lookup, optionally auto-populate invoice items from templates once bill-to is known.
   const [autoPopulateAfterRef, setAutoPopulateAfterRef] = useState(false);
+  const [templateOptions, setTemplateOptions] = useState([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
+  const [templateLoading, setTemplateLoading] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    setTemplateLoading(true);
+    fetchInvoiceTemplates({})
+      .then((result) => {
+        if (!mounted) return;
+        setTemplateOptions(Array.isArray(result?.list) ? result.list : []);
+      })
+      .catch((err) => {
+        console.warn("[CreateInvoice] failed to load invoice templates", err);
+        if (mounted) setTemplateOptions([]);
+      })
+      .finally(() => {
+        if (mounted) setTemplateLoading(false);
+      });
+    return () => {
+      mounted = false;
+    };
+  }, []);
 
   // Populate BL list on mount: prefer sessionStorage templates -> fallback generated demo BLs
   React.useEffect(() => {
@@ -471,8 +494,8 @@ function CreateInvoice({
         setItems([{ id: 1, billingCode: "", description: "", rate: 0, qty: 1 }]);
       }
 
-      const mbl = (payload?.tOIMMainDto?.fMblno || "").toString().trim();
-      const hblRows = Array.isArray(payload?.tOIHMainDtos)
+      const mbl = (payload?.tOIMMainDto?.fMblno|| payload?.tAIMMain?.fMawbNo || "").toString().trim();
+      const hblRows = Array.isArray(payload?.tOIHMainDtos || payload?.tAIHMains)
         ? payload.tOIHMainDtos
         : [];
       const extractNames = (row = {}) => {
@@ -536,7 +559,7 @@ function CreateInvoice({
       };
       const hblNumbers = hblRows
         .map((row) => ({
-          number: (row?.fHblno || "").toString().trim(),
+          number: (row?.fHblno || row?.fHawbNo|| "").toString().trim(),
           meta: extractNames(row),
           recordId:
             row?.fId ??
@@ -557,6 +580,7 @@ function CreateInvoice({
           payload?.tOIMMainDto?.fid ??
           payload?.tOIMMainDto?.id ??
           payload?.tOIMMainDto?.Id ??
+          payload?.tAIMMainDto?.fId ??
           null;
         metaMap[mbl] = {
           kind: "MBL",
@@ -567,6 +591,7 @@ function CreateInvoice({
             : { customerName: "", customerShort: "" }),
         };
       }
+
       hblNumbers.forEach(({ number, meta, recordId }) => {
         metaMap[number] = {
           kind: "HBL",
@@ -835,6 +860,47 @@ function CreateInvoice({
         err?.message || "Unable to load invoice template for this Bill To."
       );
     }
+  };
+
+  const applyInvoiceTemplate = (template) => {
+    if (!template) return;
+
+    setBillTo(template.customerName || template.billToName || "");
+    setSelectedCustomerId(template.customerId ?? template.billTo ?? null);
+
+    const templateTerm = Number(template.netTerm ?? template.term);
+    if (!Number.isNaN(templateTerm) && templateTerm >= 0) {
+      setNetTerm(templateTerm);
+      const baseDate =
+        invoiceDate instanceof Date
+          ? invoiceDate
+          : new Date(invoiceDate || Date.now());
+      const due = new Date(baseDate);
+      due.setDate(due.getDate() + templateTerm);
+      setDueDate(due);
+    }
+
+    if (Array.isArray(template.items) && template.items.length) {
+      setItems(
+        template.items.map((it, idx) => ({
+          id: idx + 1,
+          billingCode: it.billingCode || it.code || "",
+          description: it.description || it.desc || "",
+          rate: typeof it.rate !== "undefined" ? it.rate : it.amount || 0,
+          qty: typeof it.qty !== "undefined" ? it.qty : 1,
+        }))
+      );
+    }
+
+    setRefLookupError(null);
+  };
+
+  const handleTemplateChange = (templateId) => {
+    setSelectedTemplateId(templateId);
+    const selected = templateOptions.find(
+      (template) => String(template.id) === String(templateId)
+    );
+    applyInvoiceTemplate(selected);
   };
 
   // Line items (reused from CreateInvoiceTemplate)
@@ -1387,6 +1453,32 @@ function CreateInvoice({
           </div>
         </header>
         <div className="header-grid">
+          <div className="field span-2">
+            <label>Template Name</label>
+            <select
+              className="input-control"
+              value={selectedTemplateId}
+              onChange={(e) => handleTemplateChange(e.target.value)}
+              disabled={templateLoading}
+            >
+              <option value="">
+                {templateLoading ? "Loading templates..." : "Select template"}
+              </option>
+              {templateOptions.map((template) => {
+                const label =
+                  template.name ||
+                  template.Name ||
+                  template.billToName ||
+                  `Template #${template.id}`;
+                return (
+                  <option key={template.id ?? label} value={template.id ?? ""}>
+                    {label}
+                  </option>
+                );
+              })}
+            </select>
+          </div>
+
           <div className="field span-2 customer-field">
             <label>Bill To</label>
             <div className="ac-wrap">
@@ -1573,7 +1665,19 @@ function CreateInvoice({
           <div>
             <h3>Invoice Items</h3>
           </div>
-
+          <button
+            type="button"
+            className="btn outline"
+            onClick={() => {
+              const newId = addItem();
+              setTimeout(() => {
+                const node = refs.current?.[newId]?.billingCode;
+                if (node && typeof node.focus === "function") node.focus();
+              }, 0);
+            }}
+          >
+            + Add row
+          </button>
         </header>
         <div className="line-table-wrapper">
           <table className="line-table">

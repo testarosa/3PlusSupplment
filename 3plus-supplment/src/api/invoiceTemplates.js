@@ -20,6 +20,8 @@ const normalizeTemplate = (tpl) => {
 
   return {
     ...tpl,
+    name: tpl.name ?? tpl.Name ?? "",
+    isDefault: tpl.isDefault ?? tpl.IsDefault ?? false,
     customerId: tpl.billTo ?? tpl.customerId ?? null,
     customerName: tpl.billToName ?? tpl.customerName ?? "",
     netTerm: tpl.term ?? tpl.netTerm ?? 30,
