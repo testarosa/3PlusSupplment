@@ -1,10 +1,16 @@
-import React, { useCallback, useState, useMemo, useRef, useEffect } from "react";
+import React, {
+  useCallback,
+  useState,
+  useMemo,
+  useRef,
+  useEffect,
+} from "react";
 import { createPortal } from "react-dom";
 import { useSelector } from "react-redux";
 import "./CreateInvoice.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
-import { fetchInvoiceTemplates, fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
+import { fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
 import { getInvoiceByRef, saveInvoice } from "./api/invoices";
 import { getCustomersByName } from "./api/customers";
 import { getBillingCodes } from "./api/billingCodes";
@@ -12,6 +18,8 @@ import { selectAuth } from "./store/slices/authSlice";
 
 const TB_NAME_OIM = "T_OIMMAIN";
 const TB_NAME_OIH = "T_OIHMAIN";
+const TB_NAME_AIM = "T_AIMMAIN";
+const TB_NAME_AIH = "T_AIHMAIN";
 
 const DatePickerPopperContainer = ({ children }) => {
   if (typeof document === "undefined") return children;
@@ -47,13 +55,14 @@ const normalizeCustomerOption = (input) => {
     input.CustomerId ??
     input.customerID ??
     input.CustomerID;
+
   const valueRaw = input.value ?? input.Value ?? input.code ?? input.Code;
   const value =
     valueRaw != null
       ? valueRaw.toString()
       : idRaw != null
-      ? idRaw.toString()
-      : name;
+        ? idRaw.toString()
+        : name;
   if (!name && !value) return null;
   return {
     name: name || value,
@@ -81,6 +90,26 @@ const optionLabel = (opt) => {
   if (typeof opt === "string") return opt;
   return opt.name || opt.value || "";
 };
+
+const getInvoiceFreightType = (payload = {}) => {
+  const explicit =
+    payload?.freightType ??
+    payload?.FreightType ??
+    payload?.frightType ??
+    payload?.FrightType ??
+    payload?.tOIMMainDto?.freightType ??
+    payload?.tAIMMain?.freightType;
+  if (explicit) return String(explicit).trim().toUpperCase();
+  if (payload?.tOIMMainDto || Array.isArray(payload?.tOIHMainDtos)) return "OI";
+  if (payload?.tAIMMain || payload?.tAIMMainDto || Array.isArray(payload?.tAIHMains)) {
+    return "AI";
+  }
+  return "OI";
+};
+
+const findDefaultTemplate = (templates = []) =>
+  templates.find((template) => Boolean(template?.isDefault ?? template?.IsDefault)) ??
+  null;
 
 const metaToCustomerOption = (meta) => {
   if (!meta) return null;
@@ -149,7 +178,7 @@ const extractInvoiceLineItemsFromLookup = (payload) => {
         row.fBillcode ??
         row.fBillCode ??
         row.fCode ??
-        row.fBillingcode
+        row.fBillingcode,
     );
 
     const description = normalizeText(
@@ -160,7 +189,7 @@ const extractInvoiceLineItemsFromLookup = (payload) => {
         row.desc ??
         row.fDescription ??
         row.fDesc ??
-        row.fBillingDescription
+        row.fBillingDescription,
     );
 
     const rate =
@@ -172,7 +201,7 @@ const extractInvoiceLineItemsFromLookup = (payload) => {
           row.Amount ??
           row.fAmount ??
           row.unitPrice ??
-          row.UnitPrice
+          row.UnitPrice,
       ) ?? 0;
 
     const qty =
@@ -182,7 +211,7 @@ const extractInvoiceLineItemsFromLookup = (payload) => {
           row.quantity ??
           row.Quantity ??
           row.fQty ??
-          row.fQuantity
+          row.fQuantity,
       ) ?? 1;
 
     // Only include rows that have at least something meaningful.
@@ -221,13 +250,19 @@ function CreateInvoice({
     currentUser?.id ??
     currentUser?.Id ??
     "";
+  const userNameForTemplates =
+    currentUser?.userId ??
+    currentUser?.userName ??
+    currentUser?.username ??
+    currentUser?.name ??
+    "POM";
   // BL list is populated from templates or demo fallback (no Ref input in this UI)
   const [acBL, setAcBL] = useState({ list: [], index: -1, visible: false });
   const [selectedBL, setSelectedBL] = useState("");
   // editable header fields
   const [billTo, setBillTo] = useState(initialData?.billTo ?? "");
   const [selectedCustomerId, setSelectedCustomerId] = useState(
-    initialData?.customerId ?? null
+    initialData?.customerId ?? null,
   );
   const [acBill, setAcBill] = useState({
     list: [],
@@ -249,13 +284,13 @@ function CreateInvoice({
   };
 
   const [invoicePostDate, setInvoicePostDate] = useState(
-    parseDate(initialData?.invoicePostDate) ?? new Date()
+    parseDate(initialData?.invoicePostDate) ?? new Date(),
   );
   const [invoiceDate, setInvoiceDate] = useState(
-    parseDate(initialData?.invoiceDate) ?? new Date()
+    parseDate(initialData?.invoiceDate) ?? new Date(),
   );
   const [dueDate, setDueDate] = useState(
-    parseDate(initialData?.dueDate) ?? null
+    parseDate(initialData?.dueDate) ?? null,
   );
   const [netTerm, setNetTerm] = useState(() => {
     if (initialData?.netTerm === 0) return 0;
@@ -263,7 +298,7 @@ function CreateInvoice({
     return "";
   });
   const [invoiceNumber, setInvoiceNumber] = useState(
-    initialData?.invoiceNo ?? initialData?.invoiceNumber ?? ""
+    initialData?.invoiceNo ?? initialData?.invoiceNumber ?? "",
   );
   // Ref state (re-added per request)
   const [refSearchTerm, setRefSearchTerm] = useState(initialData?.ref ?? "");
@@ -277,39 +312,19 @@ function CreateInvoice({
   const [selectedTemplateId, setSelectedTemplateId] = useState("");
   const [templateLoading, setTemplateLoading] = useState(false);
 
-  useEffect(() => {
-    let mounted = true;
-    setTemplateLoading(true);
-    fetchInvoiceTemplates({})
-      .then((result) => {
-        if (!mounted) return;
-        setTemplateOptions(Array.isArray(result?.list) ? result.list : []);
-      })
-      .catch((err) => {
-        console.warn("[CreateInvoice] failed to load invoice templates", err);
-        if (mounted) setTemplateOptions([]);
-      })
-      .finally(() => {
-        if (mounted) setTemplateLoading(false);
-      });
-    return () => {
-      mounted = false;
-    };
-  }, []);
-
   // Populate BL list on mount: prefer sessionStorage templates -> fallback generated demo BLs
   React.useEffect(() => {
     try {
       const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null"
+        sessionStorage.getItem("templates") || "null",
       );
       if (Array.isArray(templates) && templates.length) {
         const bls = Array.from(
           new Set(
             templates
               .flatMap((t) => (Array.isArray(t.blNumbers) ? t.blNumbers : []))
-              .filter(Boolean)
-          )
+              .filter(Boolean),
+          ),
         );
         if (bls.length) {
           setAcBL({ list: bls.slice(0, 50), index: 0, visible: false });
@@ -343,15 +358,15 @@ function CreateInvoice({
   React.useEffect(() => {
     try {
       const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null"
+        sessionStorage.getItem("templates") || "null",
       );
       if (Array.isArray(templates) && templates.length) {
         const customers = Array.from(
           new Set(
             templates
               .map((t) => (t.customer || t.customerName || "").trim())
-              .filter(Boolean)
-          )
+              .filter(Boolean),
+          ),
         );
         setCustomerOptions(dedupeCustomerOptions(customers));
         return;
@@ -359,9 +374,7 @@ function CreateInvoice({
     } catch (e) {
       /* ignore */
     }
-    setCustomerOptions(
-      dedupeCustomerOptions([])
-    );
+    setCustomerOptions(dedupeCustomerOptions([]));
   }, []);
 
   // Ref handlers: autocomplete + search
@@ -401,12 +414,12 @@ function CreateInvoice({
     let handled = false;
     try {
       const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null"
+        sessionStorage.getItem("templates") || "null",
       );
       if (Array.isArray(templates)) {
         const t = templates.find(
           (it) =>
-            (it.ref || "").toLowerCase() === (refValue || "").toLowerCase()
+            (it.ref || "").toLowerCase() === (refValue || "").toLowerCase(),
         );
         if (t && Array.isArray(t.blNumbers) && t.blNumbers.length) {
           const list = t.blNumbers.slice(0, 50);
@@ -423,7 +436,7 @@ function CreateInvoice({
       const refKey = (refValue || "REF").replace(/[^a-zA-Z0-9-]/g, "") || "REF";
       const generated = Array.from(
         { length: 5 },
-        (_, i) => `${refKey}-BL-${(i + 1).toString().padStart(3, "0")}`
+        (_, i) => `${refKey}-BL-${(i + 1).toString().padStart(3, "0")}`,
       );
       setAcBL({
         list: generated,
@@ -437,10 +450,53 @@ function CreateInvoice({
     return handled;
   };
 
+  const loadTemplatesForBillTo = async (
+    billToId,
+    freightType = "OI",
+    { selectDefault = false, applyDefault = false } = {},
+  ) => {
+    const normalizedBillToId = coerceNumber(billToId) ?? String(billToId || "").trim();
+    if (!normalizedBillToId && normalizedBillToId !== 0) {
+      setTemplateOptions([]);
+      setSelectedTemplateId("");
+      return [];
+    }
+
+    setTemplateLoading(true);
+    try {
+      const templates = await fetchInvoiceTemplatesByCustomer(
+        normalizedBillToId,
+        userNameForTemplates,
+        freightType,
+      );
+      const nextTemplates = Array.isArray(templates) ? templates : [];
+      setTemplateOptions(nextTemplates);
+      const defaultTemplate = selectDefault
+        ? findDefaultTemplate(nextTemplates)
+        : null;
+      setSelectedTemplateId(defaultTemplate?.id != null ? String(defaultTemplate.id) : "");
+      if (applyDefault && defaultTemplate) {
+        applyInvoiceTemplate(defaultTemplate);
+      }
+      return nextTemplates;
+    } catch (err) {
+      console.warn("[CreateInvoice] template lookup failed", err);
+      setTemplateOptions([]);
+      setSelectedTemplateId("");
+      setRefLookupError(
+        err?.message || "Unable to load invoice templates for this Bill To.",
+      );
+      return [];
+    } finally {
+      setTemplateLoading(false);
+    }
+  };
+
   const doRefSearch = async (e) => {
     if (e && e.preventDefault) e.preventDefault();
     const rawQuery = (refSearchTerm || "").trim();
-    const { refQuery: query, preferredBl: preferredBlFromInput } = parseCombinedRefInput(rawQuery);
+    const { refQuery: query, preferredBl: preferredBlFromInput } =
+      parseCombinedRefInput(rawQuery);
     if (!query) {
       setSelectedRef("");
       setSelectedBL("");
@@ -459,8 +515,10 @@ function CreateInvoice({
     setDueDate(null);
     setInvoiceNumber("");
     setItems([]);
+    setTemplateOptions([]);
+    setSelectedTemplateId("");
     setRefSearching(true);
-    
+
     try {
       const response = await getInvoiceByRef(query);
       let payload = response;
@@ -475,6 +533,7 @@ function CreateInvoice({
       if (payload && typeof payload === "object" && payload.data) {
         payload = payload.data;
       }
+      const lookupFreightType = getInvoiceFreightType(payload);
 
       // Populate invoice items from the lookup payload when present.
       const extractedLines = extractInvoiceLineItemsFromLookup(payload);
@@ -486,18 +545,30 @@ function CreateInvoice({
             description: line.description || "",
             rate: typeof line.rate !== "undefined" ? line.rate : 0,
             qty: typeof line.qty !== "undefined" ? line.qty : 1,
-          }))
+          })),
         );
         setAutoPopulateAfterRef(false);
       } else {
         // Keep UI usable while we possibly auto-populate from templates.
-        setItems([{ id: 1, billingCode: "", description: "", rate: 0, qty: 1 }]);
+        setItems([
+          { id: 1, billingCode: "", description: "", rate: 0, qty: 1 },
+        ]);
       }
 
-      const mbl = (payload?.tOIMMainDto?.fMblno|| payload?.tAIMMain?.fMawbNo || "").toString().trim();
-      const hblRows = Array.isArray(payload?.tOIHMainDtos || payload?.tAIHMains)
+      const mbl = (
+        payload?.tOIMMainDto?.fMblno ||
+        payload?.tAIMMain?.fMawbNo ||
+        ""
+      )
+        .toString()
+        .trim();
+
+      const hblRows = Array.isArray(payload?.tOIHMainDtos)
         ? payload.tOIHMainDtos
-        : [];
+        : Array.isArray(payload?.tAIHMains)
+          ? payload.tAIHMains
+          : [];
+
       const extractNames = (row = {}) => {
         const toTrimmedString = (value) =>
           value != null && typeof value !== "object"
@@ -527,10 +598,16 @@ function CreateInvoice({
 
         let parsedCustomerId = null;
         if (rawId != null) {
-          const trimmedId =
-            typeof rawId === "string" ? rawId.trim() : rawId;
+          const trimmedId = typeof rawId === "string" ? rawId.trim() : rawId;
           if (trimmedId !== "") {
             parsedCustomerId = coerceNumber(trimmedId);
+          }
+        }
+        if (parsedCustomerId == null && rawCode != null) {
+          const trimmedCode =
+            typeof rawCode === "string" ? rawCode.trim() : rawCode;
+          if (trimmedCode !== "") {
+            parsedCustomerId = coerceNumber(trimmedCode);
           }
         }
 
@@ -541,10 +618,10 @@ function CreateInvoice({
               row.fCname ??
               row.customer ??
               row.Customer ??
-              ""
+              "",
           ),
           customerShort: toTrimmedString(
-            row.fCustomerSName ?? row.customerShort ?? row.customerSName ?? ""
+            row.fCustomerSName ?? row.customerShort ?? row.customerSName ?? "",
           ),
           customerCode: toTrimmedString(rawCode),
           custRefNo: toTrimmedString(
@@ -552,22 +629,18 @@ function CreateInvoice({
               row.custRefNo ??
               row.customerRefNo ??
               row.CustomerRefNo ??
-              ""
+              "",
           ),
           customerId: parsedCustomerId,
         };
       };
+
       const hblNumbers = hblRows
         .map((row) => ({
-          number: (row?.fHblno || row?.fHawbNo|| "").toString().trim(),
+          number: (row?.fHblno || row?.fHawbNo || "").toString().trim(),
           meta: extractNames(row),
           recordId:
-            row?.fId ??
-            row?.FId ??
-            row?.fid ??
-            row?.id ??
-            row?.Id ??
-            null,
+            row?.fId ?? row?.FId ?? row?.fid ?? row?.id ?? row?.Id ?? null,
         }))
         .filter((entry) => entry.number);
 
@@ -606,10 +679,14 @@ function CreateInvoice({
       combinedList.push(...hblNumbers.map((entry) => entry.number));
 
       if (combinedList.length) {
-        const defaultPreferred = (hblNumbers[0]?.number || "").toString().trim() || mbl || combinedList[0];
-        const preferredBl = preferredBlFromInput && combinedList.includes(preferredBlFromInput)
-          ? preferredBlFromInput
-          : defaultPreferred;
+        const defaultPreferred =
+          (hblNumbers[0]?.number || "").toString().trim() ||
+          mbl ||
+          combinedList[0];
+        const preferredBl =
+          preferredBlFromInput && combinedList.includes(preferredBlFromInput)
+            ? preferredBlFromInput
+            : defaultPreferred;
 
         setAcBL({
           list: combinedList,
@@ -631,21 +708,27 @@ function CreateInvoice({
           if (combined) setBillTo(combined);
 
           const normalizedId = normalizedMeta
-            ? coerceNumber(normalizedMeta.id) ?? coerceNumber(normalizedMeta.value)
+            ? (coerceNumber(normalizedMeta.id) ??
+              coerceNumber(normalizedMeta.value))
             : null;
           const derivedCustomerId =
             typeof normalizedId === "number"
               ? normalizedId
               : coerceNumber(metaOverride.customerId);
           setSelectedCustomerId(
-            typeof derivedCustomerId === "number" ? derivedCustomerId : null
+            typeof derivedCustomerId === "number" ? derivedCustomerId : null,
           );
+          if (typeof derivedCustomerId === "number") {
+            await loadTemplatesForBillTo(derivedCustomerId, lookupFreightType, {
+              applyDefault: !extractedLines.length,
+              selectDefault: true,
+            });
+          } else {
+            setTemplateOptions([]);
+            setSelectedTemplateId("");
+          }
         }
 
-        // If lookup payload didn't include line items, try to auto-populate from templates.
-        if (!extractedLines.length) {
-          setAutoPopulateAfterRef(true);
-        }
         return;
       }
 
@@ -668,18 +751,18 @@ function CreateInvoice({
     let bt = "";
     try {
       const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null"
+        sessionStorage.getItem("templates") || "null",
       );
       if (Array.isArray(templates)) {
         let t = null;
         if (refVal)
           t = templates.find(
             (it) =>
-              (it.ref || "").toLowerCase() === (refVal || "").toLowerCase()
+              (it.ref || "").toLowerCase() === (refVal || "").toLowerCase(),
           );
         if (!t && blVal)
           t = templates.find(
-            (it) => Array.isArray(it.blNumbers) && it.blNumbers.includes(blVal)
+            (it) => Array.isArray(it.blNumbers) && it.blNumbers.includes(blVal),
           );
         if (!t && templates.length) t = templates[0];
         if (t && t.customer) bt = t.customer;
@@ -698,7 +781,8 @@ function CreateInvoice({
       if (combined) bt = combined;
 
       const normalizedId = normalizedMeta
-        ? coerceNumber(normalizedMeta.id) ?? coerceNumber(normalizedMeta.value)
+        ? (coerceNumber(normalizedMeta.id) ??
+          coerceNumber(normalizedMeta.value))
         : null;
       derivedCustomerId =
         typeof normalizedId === "number"
@@ -708,13 +792,11 @@ function CreateInvoice({
       if (normalizedMeta) {
         setCustomerOptions((prev) => {
           const label = (optionLabel(normalizedMeta) || "").toLowerCase();
-          const value = (normalizedMeta.value || "")
-            .toString()
-            .toLowerCase();
+          const value = (normalizedMeta.value || "").toString().toLowerCase();
           const exists = prev.some(
             (opt) =>
               (optionLabel(opt) || "").toLowerCase() === label &&
-              (opt.value || "").toString().toLowerCase() === value
+              (opt.value || "").toString().toLowerCase() === value,
           );
           if (exists) return prev;
           return [...prev, normalizedMeta];
@@ -724,7 +806,7 @@ function CreateInvoice({
 
     setBillTo(bt);
     setSelectedCustomerId(
-      typeof derivedCustomerId === "number" ? derivedCustomerId : null
+      typeof derivedCustomerId === "number" ? derivedCustomerId : null,
     );
   };
 
@@ -804,8 +886,7 @@ function CreateInvoice({
   };
 
   const selectBill = (val) => {
-    if (!val || val.value === "__loading" || val.value === "__empty")
-      return;
+    if (!val || val.value === "__loading" || val.value === "__empty") return;
     const normalized = normalizeCustomerOption(val);
     if (!normalized) return;
     setBillTo(normalized.name);
@@ -816,16 +897,16 @@ function CreateInvoice({
   };
 
   const handleAutoPopulate = async () => {
-    const normalizedBillTo = (billTo || "").trim();
-    if (!normalizedBillTo) {
+    const normalizedBillToId = coerceNumber(selectedCustomerId);
+    if (typeof normalizedBillToId !== "number") {
       setRefLookupError(
-        "Bill To is required before auto-populating invoice details."
+        "Bill To customer id is required before auto-populating invoice details.",
       );
       return;
     }
 
     try {
-      const templates = await fetchInvoiceTemplatesByCustomer(normalizedBillTo);
+      const templates = await loadTemplatesForBillTo(normalizedBillToId);
       const template =
         Array.isArray(templates) && templates.length ? templates[0] : null;
       if (!template || !template.items?.length) {
@@ -857,7 +938,7 @@ function CreateInvoice({
     } catch (err) {
       console.warn("[CreateInvoice] auto populate lookup failed", err);
       setRefLookupError(
-        err?.message || "Unable to load invoice template for this Bill To."
+        err?.message || "Unable to load invoice template for this Bill To.",
       );
     }
   };
@@ -888,7 +969,7 @@ function CreateInvoice({
           description: it.description || it.desc || "",
           rate: typeof it.rate !== "undefined" ? it.rate : it.amount || 0,
           qty: typeof it.qty !== "undefined" ? it.qty : 1,
-        }))
+        })),
       );
     }
 
@@ -898,7 +979,7 @@ function CreateInvoice({
   const handleTemplateChange = (templateId) => {
     setSelectedTemplateId(templateId);
     const selected = templateOptions.find(
-      (template) => String(template.id) === String(templateId)
+      (template) => String(template.id) === String(templateId),
     );
     applyInvoiceTemplate(selected);
   };
@@ -913,19 +994,18 @@ function CreateInvoice({
           rate: it.rate ?? it.amount ?? 0,
           qty: it.qty ?? 1,
         }))
-      : [{ id: 1, billingCode: "", description: "", rate: 0, qty: 1 }]
+      : [{ id: 1, billingCode: "", description: "", rate: 0, qty: 1 }],
   );
   const updateItem = (id, field, value) => {
     setItems((prev) =>
-      prev.map((it) => (it.id === id ? { ...it, [field]: value } : it))
+      prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)),
     );
   };
 
   useEffect(() => {
     if (!autoPopulateAfterRef) return;
     if (refSearching) return;
-    const normalizedBillTo = (billTo || "").trim();
-    if (!normalizedBillTo) return;
+    if (typeof coerceNumber(selectedCustomerId) !== "number") return;
 
     const hasMeaningfulLines = (items || []).some((it) => {
       if (!it) return false;
@@ -945,7 +1025,7 @@ function CreateInvoice({
     setAutoPopulateAfterRef(false);
     // Populate terms + items from templates.
     handleAutoPopulate();
-  }, [autoPopulateAfterRef, billTo, items, refSearching]);
+  }, [autoPopulateAfterRef, selectedCustomerId, items, refSearching]);
 
   const refs = useRef({});
   const billingDebounce = useRef({});
@@ -984,7 +1064,10 @@ function CreateInvoice({
     }
 
     const top = rect.bottom + 6;
-    const maxHeight = Math.max(120, Math.min(260, window.innerHeight - top - margin));
+    const maxHeight = Math.max(
+      120,
+      Math.min(260, window.innerHeight - top - margin),
+    );
 
     setBillingAcStyle({
       position: "fixed",
@@ -1026,7 +1109,10 @@ function CreateInvoice({
     }
 
     const top = rect.bottom + 8;
-    const maxHeight = Math.max(140, Math.min(260, window.innerHeight - top - margin));
+    const maxHeight = Math.max(
+      140,
+      Math.min(260, window.innerHeight - top - margin),
+    );
 
     setBillToAcStyle({
       position: "fixed",
@@ -1093,7 +1179,7 @@ function CreateInvoice({
   useEffect(() => {
     return () => {
       Object.values(billingDebounce.current || {}).forEach((timer) =>
-        clearTimeout(timer)
+        clearTimeout(timer),
       );
       billingDebounce.current = {};
     };
@@ -1135,7 +1221,7 @@ function CreateInvoice({
         ? billingCodeOptions.filter(
             (o) =>
               o.code.toLowerCase().includes(lowered) ||
-              (o.desc && o.desc.toLowerCase().includes(lowered))
+              (o.desc && o.desc.toLowerCase().includes(lowered)),
           )
         : billingCodeOptions.slice(0, 6);
 
@@ -1166,7 +1252,9 @@ function CreateInvoice({
         const results = await getBillingCodes(q);
         let list = (results || []).map((it) => ({
           code: (it?.value ?? it?.code ?? "").toString().trim(),
-          desc: (it?.name ?? it?.description ?? it?.desc ?? "").toString().trim(),
+          desc: (it?.name ?? it?.description ?? it?.desc ?? "")
+            .toString()
+            .trim(),
         }));
         const seen = new Set();
         list = list.filter((it) => {
@@ -1179,7 +1267,13 @@ function CreateInvoice({
         list = list.slice(0, 50);
 
         if (!list.length) {
-          list = [{ code: "__empty", desc: "No matching billing codes", disabled: true }];
+          list = [
+            {
+              code: "__empty",
+              desc: "No matching billing codes",
+              disabled: true,
+            },
+          ];
         }
         setAc({
           id,
@@ -1199,7 +1293,8 @@ function CreateInvoice({
 
   const selectAc = (id, opt) => {
     if (!opt) return;
-    if (opt.disabled || opt.code === "__loading" || opt.code === "__empty") return;
+    if (opt.disabled || opt.code === "__loading" || opt.code === "__empty")
+      return;
     if (billingDebounce.current[id]) {
       clearTimeout(billingDebounce.current[id]);
       billingDebounce.current[id] = null;
@@ -1225,7 +1320,7 @@ function CreateInvoice({
   // Keep at least one line item — don't remove if there's only one left
   const removeItem = (id) =>
     setItems((prev) =>
-      prev.length > 1 ? prev.filter((i) => i.id !== id) : prev
+      prev.length > 1 ? prev.filter((i) => i.id !== id) : prev,
     );
 
   const itemAmount = (it) => {
@@ -1236,7 +1331,7 @@ function CreateInvoice({
 
   const subtotal = useMemo(
     () => items.reduce((s, it) => s + itemAmount(it), 0),
-    [items]
+    [items],
   );
 
   const lineStats = useMemo(() => {
@@ -1252,7 +1347,7 @@ function CreateInvoice({
 
   const avgLineAmount = useMemo(
     () => (lineStats.total ? subtotal / lineStats.total : 0),
-    [lineStats.total, subtotal]
+    [lineStats.total, subtotal],
   );
 
   const readiness = useMemo(
@@ -1262,7 +1357,17 @@ function CreateInvoice({
       schedule: Boolean(invoicePostDate && invoiceDate && dueDate),
       lines: lineStats.total > 0 && lineStats.ready === lineStats.total,
     }),
-    [selectedRef, refSearchTerm, billTo, selectedCustomerId, invoicePostDate, invoiceDate, dueDate, lineStats.total, lineStats.ready]
+    [
+      selectedRef,
+      refSearchTerm,
+      billTo,
+      selectedCustomerId,
+      invoicePostDate,
+      invoiceDate,
+      dueDate,
+      lineStats.total,
+      lineStats.ready,
+    ],
   );
 
   const progressSteps = useMemo(
@@ -1277,7 +1382,9 @@ function CreateInvoice({
       {
         label: "Bill-to selection",
         complete: readiness.customer,
-        detail: readiness.customer ? billTo || "Customer selected" : "Pick customer",
+        detail: readiness.customer
+          ? billTo || "Customer selected"
+          : "Pick customer",
       },
       {
         label: "Schedule & terms",
@@ -1292,7 +1399,16 @@ function CreateInvoice({
         detail: `${lineStats.ready}/${lineStats.total || 0} ready`,
       },
     ],
-    [readiness, selectedRef, refSearchTerm, billTo, netTerm, dueDate, lineStats.ready, lineStats.total]
+    [
+      readiness,
+      selectedRef,
+      refSearchTerm,
+      billTo,
+      netTerm,
+      dueDate,
+      lineStats.ready,
+      lineStats.total,
+    ],
   );
 
   const getSelectedBlMeta = () => {
@@ -1338,8 +1454,8 @@ function CreateInvoice({
         (selectedMeta?.kind === "MBL"
           ? TB_NAME_OIM
           : selectedMeta?.kind === "HBL"
-          ? TB_NAME_OIH
-          : "T_OIHMAIN");
+            ? TB_NAME_OIH
+            : "T_OIHMAIN");
 
       // Prepare API payload
       const apiPayload = {
@@ -1376,7 +1492,7 @@ function CreateInvoice({
     } catch (error) {
       console.error("Error saving invoice:", error);
       alert(
-        `Error saving invoice: ${error.message || "Unknown error occurred"}`
+        `Error saving invoice: ${error.message || "Unknown error occurred"}`,
       );
     }
   };
@@ -1423,7 +1539,11 @@ function CreateInvoice({
                 value={refSearchTerm}
                 onChange={(e) => handleRefChange(e.target.value)}
               />
-              <button className="btn primary" type="submit" disabled={refSearching}>
+              <button
+                className="btn primary"
+                type="submit"
+                disabled={refSearching}
+              >
                 {refSearching ? "Searching…" : "Search"}
               </button>
             </div>
@@ -1468,7 +1588,6 @@ function CreateInvoice({
                 const label =
                   template.name ||
                   template.Name ||
-                  template.billToName ||
                   `Template #${template.id}`;
                 return (
                   <option key={template.id ?? label} value={template.id ?? ""}>
@@ -1526,13 +1645,19 @@ function CreateInvoice({
                   }
                 }}
                 onBlur={() =>
-                  setTimeout(() => setAcBill((s) => ({ ...s, visible: false })), 120)
+                  setTimeout(
+                    () => setAcBill((s) => ({ ...s, visible: false })),
+                    120,
+                  )
                 }
               />
               {selectedCustomerId && (
-                <span className="customer-id-chip">ID #{selectedCustomerId}</span>
+                <span className="customer-id-chip">
+                  ID #{selectedCustomerId}
+                </span>
               )}
-              {acBill.visible && typeof document !== "undefined" &&
+              {acBill.visible &&
+                typeof document !== "undefined" &&
                 createPortal(
                   <ul
                     className="ac-list ac-list-portal"
@@ -1542,7 +1667,9 @@ function CreateInvoice({
                     {acBill.list.map((opt, idx) => {
                       const label = optionLabel(opt) || "Unnamed";
                       const key = `${opt?.value || label}-${idx}`;
-                      const disabled = Boolean(opt?.disabled || opt?.value === "__loading");
+                      const disabled = Boolean(
+                        opt?.disabled || opt?.value === "__loading",
+                      );
                       return (
                         <li
                           key={key}
@@ -1563,7 +1690,7 @@ function CreateInvoice({
                       );
                     })}
                   </ul>,
-                  document.body
+                  document.body,
                 )}
             </div>
           </div>
@@ -1716,7 +1843,13 @@ function CreateInvoice({
                         if (!billingCodeBootstrapped) {
                           setAc({
                             id: it.id,
-                            list: [{ code: "__loading", desc: "Loading...", disabled: true }],
+                            list: [
+                              {
+                                code: "__loading",
+                                desc: "Loading...",
+                                disabled: true,
+                              },
+                            ],
                             index: 0,
                             visible: true,
                             query: it.billingCode,
@@ -1745,7 +1878,10 @@ function CreateInvoice({
                         }
                       }}
                       onBlur={() =>
-                        setTimeout(() => setAc((s) => ({ ...s, visible: false })), 150)
+                        setTimeout(
+                          () => setAc((s) => ({ ...s, visible: false })),
+                          150,
+                        )
                       }
                       ref={(el) => {
                         refs.current[it.id] = refs.current[it.id] || {};
@@ -1753,7 +1889,9 @@ function CreateInvoice({
                       }}
                     />
 
-                    {ac.visible && ac.id === it.id && typeof document !== "undefined" &&
+                    {ac.visible &&
+                      ac.id === it.id &&
+                      typeof document !== "undefined" &&
                       createPortal(
                         <ul
                           className="ac-list ac-list-portal"
@@ -1775,18 +1913,22 @@ function CreateInvoice({
                             >
                               <div className="ac-option">
                                 <div className="ac-code">{opt.code}</div>
-                                {opt.desc && <div className="ac-desc">{opt.desc}</div>}
+                                {opt.desc && (
+                                  <div className="ac-desc">{opt.desc}</div>
+                                )}
                               </div>
                             </li>
                           ))}
                         </ul>,
-                        document.body
+                        document.body,
                       )}
                   </td>
                   <td>
                     <input
                       value={it.description}
-                      onChange={(e) => updateItem(it.id, "description", e.target.value)}
+                      onChange={(e) =>
+                        updateItem(it.id, "description", e.target.value)
+                      }
                       ref={(el) => {
                         refs.current[it.id] = refs.current[it.id] || {};
                         refs.current[it.id].description = el;
@@ -1797,7 +1939,9 @@ function CreateInvoice({
                     <input
                       type="number"
                       value={it.rate}
-                      onChange={(e) => updateItem(it.id, "rate", e.target.value)}
+                      onChange={(e) =>
+                        updateItem(it.id, "rate", e.target.value)
+                      }
                       ref={(el) => {
                         refs.current[it.id] = refs.current[it.id] || {};
                         refs.current[it.id].rate = el;
@@ -1817,7 +1961,8 @@ function CreateInvoice({
                             const newId = addItem();
                             setTimeout(() => {
                               const node = refs.current?.[newId]?.billingCode;
-                              if (node && typeof node.focus === "function") node.focus();
+                              if (node && typeof node.focus === "function")
+                                node.focus();
                             }, 0);
                           }
                         }
@@ -1850,8 +1995,7 @@ function CreateInvoice({
           </table>
         </div>
         <div className="line-footer">
-          <div className="line-metrics">
-          </div>
+          <div className="line-metrics"></div>
           <div className="subtotal-card">
             <p>Subtotal</p>
             <strong>${subtotal.toFixed(2)}</strong>
@@ -1861,7 +2005,11 @@ function CreateInvoice({
           <button type="button" className="btn ghost" onClick={internalCancel}>
             Cancel
           </button>
-          <button className="btn primary" type="button" onClick={handleSaveInvoice}>
+          <button
+            className="btn primary"
+            type="button"
+            onClick={handleSaveInvoice}
+          >
             Save invoice
           </button>
         </div>

@@ -60,7 +60,7 @@ export async function updateInvoiceTemplate(id, payload) {
   }
 }
 
-// GET /api/InvoiceTemplates?name=...&freightType=...&billToName=...
+// GET /api/InvoiceTemplates?name=...&freightType=...&billToName=...&userName=...
 export async function fetchInvoiceTemplates(filters = "") {
   const normalizedFilters =
     typeof filters === "string" ? { billToName: filters, name: filters } : filters || {};
@@ -68,10 +68,12 @@ export async function fetchInvoiceTemplates(filters = "") {
   const name = (normalizedFilters.name || "").trim();
   const freightType = (normalizedFilters.freightType || "").trim();
   const billToName = (normalizedFilters.billToName || "").trim();
+  const userName = (normalizedFilters.userName || "").trim();
 
   if (name) params.set("name", name);
   if (freightType) params.set("freightType", freightType);
   if (billToName) params.set("billToName", billToName);
+  if (userName) params.set("userName", userName);
 
   const query = params.toString() ? `?${params.toString()}` : "";
   try {
@@ -104,12 +106,18 @@ export async function fetchInvoiceTemplateById(id) {
   }
 }
 
-export async function fetchInvoiceTemplatesByCustomer(billToName) {
-  if (!billToName) throw new Error("billToName is required");
+export async function fetchInvoiceTemplatesByCustomer(
+  billTo,
+  userName = "",
+  frightType = "",
+) {
+  if (!billTo && billTo !== 0) throw new Error("billTo is required");
   try {
-    const endpoint = `${TEMPLATES_PATH}/by-customer?billToName=${encodeURIComponent(
-      billToName
-    )}`;
+    const params = new URLSearchParams();
+    params.set("billTo", String(billTo));
+    if (userName) params.set("userName", String(userName).trim());
+    if (frightType) params.set("frightType", String(frightType).trim());
+    const endpoint = `${TEMPLATES_PATH}/by-customer?${params.toString()}`;
     const res = await api.get(endpoint, { headers: { accept: "text/plain" } });
     const payload = res?.data;
     const list = Array.isArray(payload?.data)
@@ -144,5 +152,6 @@ export default {
   updateInvoiceTemplate,
   fetchInvoiceTemplates,
   fetchInvoiceTemplateById,
+  fetchInvoiceTemplatesByCustomer,
   deleteInvoiceTemplate,
 };

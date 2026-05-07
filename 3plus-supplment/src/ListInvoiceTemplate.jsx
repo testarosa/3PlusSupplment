@@ -4,6 +4,7 @@ import { useDispatch, useSelector } from 'react-redux'
 import './ListInvoiceTemplate.css'
 import { fetchInvoiceTemplates, fetchInvoiceTemplateById, deleteInvoiceTemplate } from './api/invoiceTemplates'
 import { getFreightTypes } from './api/freightTypes'
+import { selectAuth } from './store/slices/authSlice'
 import {
   setTemplates,
   setLoading,
@@ -37,6 +38,13 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
   const rows = useSelector(selectAllTemplates)
   const loading = useSelector(selectLoading)
   const error = useSelector(selectError)
+  const { user: currentUser } = useSelector(selectAuth)
+  const loginUserName =
+    currentUser?.userId ??
+    currentUser?.userName ??
+    currentUser?.username ??
+    currentUser?.name ??
+    'pom'
   const [filters, setFilters] = useState({
     name: '',
     freightType: '',
@@ -73,6 +81,7 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
       values.name ? `name "${values.name}"` : '',
       values.freightType ? `freight type "${values.freightType}"` : '',
       values.billToName ? `bill-to "${values.billToName}"` : '',
+      values.userName ? `user "${values.userName}"` : '',
     ].filter(Boolean)
     return parts.join(', ')
   }
@@ -82,6 +91,7 @@ function ListInvoiceTemplate({ templates: initialTemplates }) {
       name: (searchFilters?.name || '').trim(),
       freightType: (searchFilters?.freightType || '').trim(),
       billToName: (searchFilters?.billToName || '').trim(),
+      userName: String(searchFilters?.userName || loginUserName || '').trim(),
     }
     const hasSearchValue = Object.values(normalizedFilters).some(Boolean)
     if (!hasSearchValue) {
