@@ -12,7 +12,7 @@ export default defineConfig({
   ],
   // Dev server proxy to forward API requests to backend during development
   server: {
-    host: "192.168.20.145",
+    host: "192.168.20.151",
     port: 5173,
     proxy: {
       // Proxy any request starting with /api to the backend server to avoid CORS in dev

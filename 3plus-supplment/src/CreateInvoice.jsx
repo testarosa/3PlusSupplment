@@ -16,11 +16,6 @@ import { getCustomersByName } from "./api/customers";
 import { getBillingCodes } from "./api/billingCodes";
 import { selectAuth } from "./store/slices/authSlice";
 
-const TB_NAME_OIM = "T_OIMMAIN";
-const TB_NAME_OIH = "T_OIHMAIN";
-const TB_NAME_AIM = "T_AIMMAIN";
-const TB_NAME_AIH = "T_AIHMAIN";
-
 const DatePickerPopperContainer = ({ children }) => {
   if (typeof document === "undefined") return children;
   return createPortal(children, document.body);
@@ -505,7 +500,7 @@ function CreateInvoice({
       setRefLookupError("Reference number is required");
       return;
     }
-
+    
     setSelectedRef(query);
     setRefLookupError(null);
     const today = new Date();
@@ -521,6 +516,7 @@ function CreateInvoice({
 
     try {
       const response = await getInvoiceByRef(query);
+      console.log("Lookup response", { response }); 
       let payload = response;
       if (typeof payload === "string") {
         try {
@@ -565,9 +561,11 @@ function CreateInvoice({
 
       const hblRows = Array.isArray(payload?.tOIHMainDtos)
         ? payload.tOIHMainDtos
-        : Array.isArray(payload?.tAIHMains)
-          ? payload.tAIHMains
+        : Array.isArray(payload?.tAIHMainDtos)
+          ? payload.tAIHMainDtos
           : [];
+
+      console.log("Extracted BL info from lookup", { mbl, hblRows }); 
 
       const extractNames = (row = {}) => {
         const toTrimmedString = (value) =>
@@ -658,7 +656,7 @@ function CreateInvoice({
         metaMap[mbl] = {
           kind: "MBL",
           recordId: coerceNumber(masterRecordId),
-          tbName: TB_NAME_OIM,
+          tbName: payload?.tOIMMainDto ? "T_OIMMAIN" : payload?.tAIMMain ? "T_AIMMAIN" : null,  
           ...(firstHouse
             ? firstHouse.meta
             : { customerName: "", customerShort: "" }),
@@ -669,7 +667,7 @@ function CreateInvoice({
         metaMap[number] = {
           kind: "HBL",
           recordId: coerceNumber(recordId),
-          tbName: TB_NAME_OIH,
+          tbName: payload?.tOIHMainDtos ? "T_OIHMAIN" : payload?.tAIHMainDtos ? "T_AIHMAIN" : null, 
           ...meta,
         };
       });
@@ -1444,18 +1442,19 @@ function CreateInvoice({
       }, 0);
 
       const selectedMeta = getSelectedBlMeta();
+      console.log(selectedMeta, "Selected BL meta");  
+      
       const resolvedCustomerId =
         coerceNumber(selectedCustomerId) ??
         coerceNumber(selectedMeta?.customerId) ??
         0;
+
+      //table id
       const resolvedTbId = coerceNumber(selectedMeta?.recordId) ?? 161909;
-      const resolvedTbName =
-        selectedMeta?.tbName ??
-        (selectedMeta?.kind === "MBL"
-          ? TB_NAME_OIM
-          : selectedMeta?.kind === "HBL"
-            ? TB_NAME_OIH
-            : "T_OIHMAIN");
+      
+      //table name
+      const resolvedTbName = selectedMeta?.tBName; 
+      console.log(resolvedTbId, resolvedTbName, "Resolved table info"); 
 
       // Prepare API payload
       const apiPayload = {
@@ -1476,19 +1475,19 @@ function CreateInvoice({
       console.log("Saving invoice with data:", apiPayload);
 
       // Call the save API
-      const response = await saveInvoice(apiPayload);
+      // const response = await saveInvoice(apiPayload);
 
-      if (response?.success) {
-        alert(`Invoice saved successfully! ${response.message || ""}`);
-        console.log("Invoice save response:", response);
+      // if (response?.success) {
+      //   alert(`Invoice saved successfully! ${response.message || ""}`);
+      //   console.log("Invoice save response:", response);
 
-        // Optional: Navigate back or clear form
-        if (typeof onCancel === "function") {
-          onCancel(); // Go back to previous page
-        }
-      } else {
-        throw new Error(response?.message || "Failed to save invoice");
-      }
+      //   // Optional: Navigate back or clear form
+      //   if (typeof onCancel === "function") {
+      //     onCancel(); // Go back to previous page
+      //   }
+      // } else {
+      //   throw new Error(response?.message || "Failed to save invoice");
+      // }
     } catch (error) {
       console.error("Error saving invoice:", error);
       alert(
