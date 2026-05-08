@@ -78,6 +78,7 @@ export async function searchInvoices(filters = {}) {
   const params = new URLSearchParams();
 
   Object.entries({
+    userName: filters.userName,
     invoiceNo: filters.invoiceNo,
     customerName: filters.customerName,
     invoiceFrom: filters.invoiceFrom,

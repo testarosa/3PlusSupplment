@@ -96,15 +96,55 @@ const getInvoiceFreightType = (payload = {}) => {
     payload?.tAIMMain?.freightType;
   if (explicit) return String(explicit).trim().toUpperCase();
   if (payload?.tOIMMainDto || Array.isArray(payload?.tOIHMainDtos)) return "OI";
-  if (payload?.tAIMMain || payload?.tAIMMainDto || Array.isArray(payload?.tAIHMains)) {
+  if (
+    payload?.tAIMMain ||
+    payload?.tAIMMainDto ||
+    Array.isArray(payload?.tAIHMains)
+  ) {
     return "AI";
   }
   return "OI";
 };
 
+const pickTableName = (...values) => {
+  for (const value of values) {
+    if (value == null) continue;
+    const text = value.toString().trim();
+    if (text) return text;
+  }
+  return null;
+};
+
+const getMasterTableName = (payload = {}) =>
+  pickTableName(
+    payload?.tOIMMainDto?.tbName,
+    payload?.tOIMMainDto?.tBName,
+    payload?.tOIMMainDto?.fTbName,
+    payload?.tAIMMainDto?.tbName,
+    payload?.tAIMMainDto?.tBName,
+    payload?.tAIMMainDto?.fTbName,
+    payload?.tAIMMain?.tbName,
+    payload?.tAIMMain?.tBName,
+    payload?.tAIMMain?.fTbName,
+  ) ??
+  (payload?.tOIMMainDto
+    ? "T_OIMMAIN"
+    : payload?.tAIMMainDto || payload?.tAIMMain
+      ? "T_AIMMAIN"
+      : null);
+
+const getHouseTableName = (row = {}, payload = {}) =>
+  pickTableName(row?.tbName, row?.tBName, row?.fTbName) ??
+  (Array.isArray(payload?.tOIHMainDtos)
+    ? "T_OIHMAIN"
+    : Array.isArray(payload?.tAIHMainDtos)
+      ? "T_AIHMAIN"
+      : null);
+
 const findDefaultTemplate = (templates = []) =>
-  templates.find((template) => Boolean(template?.isDefault ?? template?.IsDefault)) ??
-  null;
+  templates.find((template) =>
+    Boolean(template?.isDefault ?? template?.IsDefault),
+  ) ?? null;
 
 const metaToCustomerOption = (meta) => {
   if (!meta) return null;
@@ -450,7 +490,8 @@ function CreateInvoice({
     freightType = "OI",
     { selectDefault = false, applyDefault = false } = {},
   ) => {
-    const normalizedBillToId = coerceNumber(billToId) ?? String(billToId || "").trim();
+    const normalizedBillToId =
+      coerceNumber(billToId) ?? String(billToId || "").trim();
     if (!normalizedBillToId && normalizedBillToId !== 0) {
       setTemplateOptions([]);
       setSelectedTemplateId("");
@@ -469,7 +510,9 @@ function CreateInvoice({
       const defaultTemplate = selectDefault
         ? findDefaultTemplate(nextTemplates)
         : null;
-      setSelectedTemplateId(defaultTemplate?.id != null ? String(defaultTemplate.id) : "");
+      setSelectedTemplateId(
+        defaultTemplate?.id != null ? String(defaultTemplate.id) : "",
+      );
       if (applyDefault && defaultTemplate) {
         applyInvoiceTemplate(defaultTemplate);
       }
@@ -500,7 +543,7 @@ function CreateInvoice({
       setRefLookupError("Reference number is required");
       return;
     }
-    
+
     setSelectedRef(query);
     setRefLookupError(null);
     const today = new Date();
@@ -516,7 +559,7 @@ function CreateInvoice({
 
     try {
       const response = await getInvoiceByRef(query);
-      console.log("Lookup response", { response }); 
+      console.log("Lookup response", { response });
       let payload = response;
       if (typeof payload === "string") {
         try {
@@ -565,7 +608,7 @@ function CreateInvoice({
           ? payload.tAIHMainDtos
           : [];
 
-      console.log("Extracted BL info from lookup", { mbl, hblRows }); 
+      console.log("Extracted BL info from lookup", { mbl, hblRows });
 
       const extractNames = (row = {}) => {
         const toTrimmedString = (value) =>
@@ -637,6 +680,7 @@ function CreateInvoice({
         .map((row) => ({
           number: (row?.fHblno || row?.fHawbNo || "").toString().trim(),
           meta: extractNames(row),
+          tbName: getHouseTableName(row, payload),
           recordId:
             row?.fId ?? row?.FId ?? row?.fid ?? row?.id ?? row?.Id ?? null,
         }))
@@ -644,6 +688,7 @@ function CreateInvoice({
 
       const metaMap = {};
       const firstHouse = hblNumbers[0];
+      const masterTableName = getMasterTableName(payload);
       if (mbl) {
         const masterRecordId =
           payload?.tOIMMainDto?.fId ??
@@ -656,18 +701,18 @@ function CreateInvoice({
         metaMap[mbl] = {
           kind: "MBL",
           recordId: coerceNumber(masterRecordId),
-          tbName: payload?.tOIMMainDto ? "T_OIMMAIN" : payload?.tAIMMain ? "T_AIMMAIN" : null,  
+          tbName: masterTableName,
           ...(firstHouse
             ? firstHouse.meta
             : { customerName: "", customerShort: "" }),
         };
       }
 
-      hblNumbers.forEach(({ number, meta, recordId }) => {
+      hblNumbers.forEach(({ number, meta, recordId, tbName }) => {
         metaMap[number] = {
           kind: "HBL",
           recordId: coerceNumber(recordId),
-          tbName: payload?.tOIHMainDtos ? "T_OIHMAIN" : payload?.tAIHMainDtos ? "T_AIHMAIN" : null, 
+          tbName,
           ...meta,
         };
       });
@@ -1442,19 +1487,28 @@ function CreateInvoice({
       }, 0);
 
       const selectedMeta = getSelectedBlMeta();
-      console.log(selectedMeta, "Selected BL meta");  
-      
+      console.log(selectedMeta, "Selected BL meta");
+
       const resolvedCustomerId =
         coerceNumber(selectedCustomerId) ??
         coerceNumber(selectedMeta?.customerId) ??
         0;
 
       //table id
-      const resolvedTbId = coerceNumber(selectedMeta?.recordId) ?? 161909;
-      
+      const resolvedTbId = coerceNumber(selectedMeta?.recordId) ?? 0;
+
       //table name
-      const resolvedTbName = selectedMeta?.tBName; 
-      console.log(resolvedTbId, resolvedTbName, "Resolved table info"); 
+      const resolvedTbName = pickTableName(
+        selectedMeta?.tbName,
+        selectedMeta?.tBName,
+      );
+      console.log(resolvedTbId, resolvedTbName, "Resolved table info");
+
+      if (!resolvedTbId || !resolvedTbName) {
+        throw new Error(
+          "Please search and select a BL before saving the invoice.",
+        );
+      }
 
       // Prepare API payload
       const apiPayload = {
@@ -1475,19 +1529,19 @@ function CreateInvoice({
       console.log("Saving invoice with data:", apiPayload);
 
       // Call the save API
-      // const response = await saveInvoice(apiPayload);
+      const response = await saveInvoice(apiPayload);
 
-      // if (response?.success) {
-      //   alert(`Invoice saved successfully! ${response.message || ""}`);
-      //   console.log("Invoice save response:", response);
+      if (response?.success) {
+        alert(`Invoice saved successfully! ${response.message || ""}`);
+        console.log("Invoice save response:", response);
 
-      //   // Optional: Navigate back or clear form
-      //   if (typeof onCancel === "function") {
-      //     onCancel(); // Go back to previous page
-      //   }
-      // } else {
-      //   throw new Error(response?.message || "Failed to save invoice");
-      // }
+        // Optional: Navigate back or clear form
+        if (typeof onCancel === "function") {
+          onCancel(); // Go back to previous page
+        }
+      } else {
+        throw new Error(response?.message || "Failed to save invoice");
+      }
     } catch (error) {
       console.error("Error saving invoice:", error);
       alert(
@@ -1585,9 +1639,7 @@ function CreateInvoice({
               </option>
               {templateOptions.map((template) => {
                 const label =
-                  template.name ||
-                  template.Name ||
-                  `Template #${template.id}`;
+                  template.name || template.Name || `Template #${template.id}`;
                 return (
                   <option key={template.id ?? label} value={template.id ?? ""}>
                     {label}

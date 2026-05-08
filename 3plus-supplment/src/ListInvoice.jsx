@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
 import './ListInvoice.css'
 import { deleteInvoice, searchInvoices } from './api/invoices'
+import { selectAuth } from './store/slices/authSlice'
 
 const PAGE_SIZE = 10
 
@@ -52,6 +54,7 @@ const describeRelativeTime = (date) => {
 }
 
 const readableFilterLabel = {
+	userName: 'User',
 	invoiceNo: 'Invoice',
 	customerName: 'Customer',
 	invoiceFrom: 'From',
@@ -60,6 +63,13 @@ const readableFilterLabel = {
 
 function ListInvoice() {
 	const navigate = useNavigate()
+	const { user: currentUser } = useSelector(selectAuth)
+	const loginUserName =
+		currentUser?.userId ??
+		currentUser?.userName ??
+		currentUser?.username ??
+		currentUser?.name ??
+		'pom'
 	const [filters, setFilters] = useState(() => ({ ...initialFilters }))
 	const [lastUsedFilters, setLastUsedFilters] = useState(() => ({ ...initialFilters }))
 	const [invoices, setInvoices] = useState([])
@@ -71,11 +81,15 @@ function ListInvoice() {
 
 	const fetchInvoices = useCallback(async (activeFilters) => {
 		if (!activeFilters) return
+		const normalizedFilters = {
+			...activeFilters,
+			userName: String(activeFilters.userName || loginUserName || '').trim(),
+		}
 		setLoading(true)
 		setError(null)
 
 		try {
-			const payload = await searchInvoices(activeFilters)
+			const payload = await searchInvoices(normalizedFilters)
 			const rows = Array.isArray(payload?.data)
 				? payload.data
 				: Array.isArray(payload)
@@ -89,7 +103,7 @@ function ListInvoice() {
 				success: Boolean(payload?.success ?? true),
 			})
 			setLastRefresh(new Date())
-			setLastUsedFilters({ ...activeFilters })
+			setLastUsedFilters({ ...normalizedFilters })
 		} catch (err) {
 			setInvoices([])
 			setMeta({ message: '', success: false })
@@ -97,10 +111,10 @@ function ListInvoice() {
 		} finally {
 			setLoading(false)
 		}
-	}, [])
+	}, [loginUserName])
 
 	useEffect(() => {
-		fetchInvoices({ ...initialFilters })
+		fetchInvoices({ ...initialFilters, userName: loginUserName })
 	}, [fetchInvoices])
 
 	const insight = useMemo(() => {
@@ -156,7 +170,7 @@ function ListInvoice() {
 	const handleSearch = (event) => {
 		event?.preventDefault()
 		setPage(1)
-		fetchInvoices(filters)
+		fetchInvoices({ ...filters, userName: loginUserName })
 	}
 
 	const handleCreateInvoice = () => {
