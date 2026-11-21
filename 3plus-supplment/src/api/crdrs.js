@@ -1,5 +1,5 @@
 import axios from "axios";
-import { buildInvoiceApiUrl } from "./config";
+import { PORTAL_API_PATH, buildInvoiceApiUrl } from "./config";
 
 const parseMaybeJson = (payload) => {
   if (typeof payload !== "string") return payload;
@@ -102,6 +102,17 @@ export async function saveCrdr(payload, { userId = "" } = {}) {
     console.warn("[saveCrdr] error", err?.message || err);
     throw err;
   }
+}
+
+export async function extractCrdrDocument(file) {
+  const response = await axios.post(`${PORTAL_API_PATH}/crdr-ai/extract`, file, {
+    headers: { "Content-Type": file.type },
+    timeout: 100_000,
+  });
+  if (!Array.isArray(response.data?.lines) || !response.data.lines.length) {
+    throw new Error("Azure AI extraction is unavailable on this portal.");
+  }
+  return response.data;
 }
 
 export default {

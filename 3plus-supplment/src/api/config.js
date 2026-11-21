@@ -1,15 +1,18 @@
-//const DEFAULT_API_BASE_URL = 'http://api.e3pl.com/'
-const DEFAULT_API_BASE_URL = "http://192.168.20.145:5048/";
+const DEFAULT_API_BASE_URL = 'http://api.e3pl.com/'
+//const DEFAULT_API_BASE_URL = "http://192.168.20.151:5048/";
+
+export const PORTAL_API_PATH =
+  globalThis.location?.origin === "https://e3pl.com" ? "/portal-api" : "";
 
 const pickEnvUrl = (value, fallback) =>
   typeof value === "string" && value.trim().length ? value.trim() : fallback;
 
-export const API_BASE_URL = pickEnvUrl(
+export const API_BASE_URL = PORTAL_API_PATH || pickEnvUrl(
   import.meta?.env?.VITE_API_BASE_URL,
   DEFAULT_API_BASE_URL,
 );
 
-export const INVOICE_API_BASE_URL = pickEnvUrl(
+export const INVOICE_API_BASE_URL = PORTAL_API_PATH || pickEnvUrl(
   import.meta?.env?.DEFAULT_API_BASE_URL,
   DEFAULT_API_BASE_URL,
 );

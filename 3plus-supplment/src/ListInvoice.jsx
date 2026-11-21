@@ -326,11 +326,6 @@ function ListInvoice() {
 					<p>Total exposure</p>
 					<h4>{formatCurrency(insight.totalAmount)}</h4>
 				</article>
-				<article className="insight-card">
-				</article>
-				<article className="insight-card">
-
-				</article>
 			</section>
 
 			<section className="panel table-panel">
@@ -360,7 +355,7 @@ function ListInvoice() {
 					{loading ? (
 						<div className="loading-state">
 							<span className="spinner" aria-hidden="true" />
-							<p>Calling /Invoice/SearchInvoices…</p>
+							<p>Loading invoices…</p>
 						</div>
 					) : invoices.length ? (
 						<>

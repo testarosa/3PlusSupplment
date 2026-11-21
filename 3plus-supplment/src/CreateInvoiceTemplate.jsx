@@ -7,84 +7,6 @@ import { getCustomersByName } from './api/customers'
 import { getBillingCodes } from './api/billingCodes'
 import { getFreightTypes } from './api/freightTypes'
 import { saveInvoiceTemplate, updateInvoiceTemplate } from './api/invoiceTemplates'
-import { getInvoiceByRef } from './api/invoices'
-
-const INVOICE_LOOKUP_SHAPES = [
-  { masterKey: 'tOIMMainDto', houseKey: 'tOIHMainDtos', freightType: 'OI' },
-  { masterKey: 'tOOMMain', houseKey: 'tOOHMains', freightType: 'OO' },
-  { masterKey: 'tAIMMain', houseKey: 'tAIHMains', freightType: 'AI' },
-  { masterKey: 'tAOMMain', houseKey: 'tAOHMains', freightType: 'AO' },
-]
-
-const coerceNumber = (value) => {
-  if (value === null || typeof value === 'undefined') return null
-  if (typeof value === 'number' && Number.isFinite(value)) return value
-  const parsed = Number(value)
-  return Number.isNaN(parsed) ? null : parsed
-}
-
-const toTrimmedString = (value) =>
-  value != null && typeof value !== 'object' ? value.toString().trim() : ''
-
-const pickLookupShape = (payload, refNo) => {
-  const byPayload = INVOICE_LOOKUP_SHAPES.find((shape) => (
-    payload?.[shape.masterKey] || (Array.isArray(payload?.[shape.houseKey]) && payload[shape.houseKey].length)
-  ))
-  if (byPayload) return byPayload
-
-  const prefix = (refNo || '').toString().trim().slice(0, 2).toUpperCase()
-  return INVOICE_LOOKUP_SHAPES.find((shape) => shape.freightType === prefix) || INVOICE_LOOKUP_SHAPES[0]
-}
-
-const extractCustomerFromHouse = (row = {}) => {
-  const rawCode =
-    row.fInvoiceto ??
-    row.fInvoiceTo ??
-    row.fCustomer ??
-    row.customer ??
-    row.Customer ??
-    row.fCustomerCode ??
-    row.customerCode ??
-    row.CustomerCode
-
-  const invoiceToId = coerceNumber(row.fInvoiceto ?? row.fInvoiceTo)
-  const partyNameById = [
-    { id: row.fCustomer, name: row.fCustomerName },
-    { id: row.fShipper, name: row.fSname },
-    { id: row.fConsignee, name: row.fCname },
-    { id: row.fNotify, name: row.fNname },
-    { id: row.fAgent, name: row.fAgentName },
-    { id: row.fBroker, name: row.fBname },
-  ].find((party) => {
-    const partyId = coerceNumber(party.id)
-    return invoiceToId != null && partyId != null && partyId === invoiceToId
-  })?.name
-
-  const rawId =
-    row.fInvoiceto ??
-    row.fInvoiceTo ??
-    row.fCustomerId ??
-    row.fCustomerID ??
-    row.customerId ??
-    row.CustomerId ??
-    row.fCustomer ??
-    row.customer
-
-  return {
-    id: coerceNumber(rawId) ?? coerceNumber(rawCode),
-    name: toTrimmedString(
-      row.fCustomerName ??
-      row.fInvoiceToName ??
-      partyNameById ??
-      row.customerName ??
-      row.CustomerName ??
-      row.fCname ??
-      row.fNname ??
-      row.customer ??
-      row.Customer
-    ),
-  }
-}
 
 function CreateInvoiceTemplate({ onSave, template, onCancel }) {
   const [templateName, setTemplateName] = useState(template?.name ?? template?.Name ?? '')
@@ -95,12 +17,6 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
   // store selected freight type code (e.g. 'OI', 'OE')
   const [freightType, setFreightType] = useState(template?.freightTypeCode ?? template?.freightType ?? '')
   const [freightOptions, setFreightOptions] = useState([])
-  const [refSearchTerm, setRefSearchTerm] = useState('')
-  const [refSearching, setRefSearching] = useState(false)
-  const [refLookupError, setRefLookupError] = useState(null)
-  const [blOptions, setBlOptions] = useState([])
-  const [selectedBL, setSelectedBL] = useState('')
-  const [blCustomerMap, setBlCustomerMap] = useState({})
 
   useEffect(() => {
     let mounted = true
@@ -141,7 +57,6 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
     setItems((prev) => prev.map((it) => (it.id === id ? { ...it, [field]: value } : it)))
   }
 
-  //Ref Number
   const refs = useRef({})
 
   // Customer options come from the API; start empty and load a small list on mount
@@ -220,8 +135,15 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
     }
 
     ;(async () => {
+      if (!freightType) {
+        setBillingCodeOptions([])
+        if (alive) setBillingCodeBootstrapped(true)
+        return
+      }
+
       try {
-        const results = await getBillingCodes('')
+        setBillingCodeBootstrapped(false)
+        const results = await getBillingCodes('', freightType)
         if (!alive) return
         setBillingCodeOptions(normalizeCodes(results))
       } catch (err) {
@@ -232,7 +154,7 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
     })()
 
     return () => { alive = false }
-  }, [])
+  }, [freightType])
 
   const updateBillingAcStyle = useCallback(() => {
     const id = ac?.id
@@ -379,7 +301,7 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
     billingDebounce.current[id] = setTimeout(async () => {
       try {
         console.debug('[CreateInvoiceTemplate] lookup billing codes for', q)
-        const results = await getBillingCodes(q)
+        const results = await getBillingCodes(q, freightType)
         let list = (results || []).map((it) => ({
           code: (it?.value ?? it?.code ?? '').toString().trim(),
           desc: (it?.name ?? it?.description ?? it?.desc ?? '').toString().trim(),
@@ -433,95 +355,6 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
 
   // Prevent removing the last remaining row — always keep at least one line item
   const removeItem = (id) => setItems((prev) => (prev.length > 1 ? prev.filter((i) => i.id !== id) : prev))
-
-  const applyBillToFromHouse = (house) => {
-    if (!house) return
-    const customer = extractCustomerFromHouse(house)
-    setCustomerName(customer.name || '')
-    setCustomerId(customer.id ?? null)
-  }
-
-  const handleBLChange = (value) => {
-    setSelectedBL(value)
-    applyBillToFromHouse(blCustomerMap[value])
-  }
-
-  const handleRefSearch = async (e) => {
-    if (e && e.preventDefault) e.preventDefault()
-    const query = (refSearchTerm || '').trim()
-    if (!query) {
-      setRefLookupError('Reference number is required.')
-      setBlOptions([])
-      setSelectedBL('')
-      setBlCustomerMap({})
-      return
-    }
-
-    setRefSearching(true)
-    setRefLookupError(null)
-
-    try {
-      const response = await getInvoiceByRef(query)
-      let payload = response
-      if (typeof payload === 'string') {
-        try { payload = JSON.parse(payload) } catch (err) { /* leave as-is */ }
-      }
-      if (payload && typeof payload === 'object' && payload.data) payload = payload.data
-
-      const shape = pickLookupShape(payload, query)
-      const master = payload?.[shape.masterKey]
-      const houses = Array.isArray(payload?.[shape.houseKey]) ? payload[shape.houseKey] : []
-
-      if (shape.freightType) setFreightType(shape.freightType)
-
-      const hblRows = houses
-        .map((row) => ({
-          row,
-          number: toTrimmedString(
-            row?.fHblno ??
-            row?.fHblNo ??
-            row?.fHawbNo ??
-            row?.fHawbno ??
-            row?.fAwbno ??
-            row?.fAwbNo ??
-            row?.hblNo ??
-            row?.hawbNo ??
-            row?.HblNo ??
-            row?.HawbNo
-          ),
-        }))
-        .filter((entry) => entry.number)
-
-      const nextMap = {}
-      hblRows.forEach(({ number, row }) => {
-        nextMap[number] = row
-      })
-      setBlOptions(hblRows.map((entry) => entry.number))
-      setBlCustomerMap(nextMap)
-
-      const preferredBL = hblRows[0]?.number || ''
-      setSelectedBL(preferredBL)
-      if (preferredBL) {
-        applyBillToFromHouse(nextMap[preferredBL])
-      } else if (master) {
-        const fallbackCustomer = extractCustomerFromHouse(master)
-        setCustomerName(fallbackCustomer.name || '')
-        setCustomerId(fallbackCustomer.id ?? null)
-      }
-
-      if (!preferredBL && !master) {
-        setRefLookupError('No BL/customer information returned for this reference.')
-      }
-    } catch (err) {
-      console.warn('[CreateInvoiceTemplate] invoice lookup failed', err)
-      setRefLookupError(err?.message || 'Unable to load invoice details.')
-      setBlOptions([])
-      setSelectedBL('')
-      setBlCustomerMap({})
-    } finally {
-      setRefSearching(false)
-    }
-  }
 
   const itemAmount = (it) => {
     const r = parseFloat(it.rate) || 0
@@ -682,51 +515,6 @@ function CreateInvoiceTemplate({ onSave, template, onCancel }) {
 
 
       <form onSubmit={handleSubmit} className="template-builder" autoComplete="off">
-        <section className="panel builder-form">
-          <header className="panel-heading">
-            <div>
-              <p className="eyebrow">Reference lookup</p>
-              <h3>Search shipment</h3>
-            </div>
-          </header>
-
-          <div className="form-grid">
-            <div className="field span-2">
-              <label htmlFor="refSearchTerm">Reference number</label>
-              <p className="field-hint">Loads Bill To from /Invoice/GetInvoice for OI, OO, AI, and AO shipments.</p>
-              <div className="ref-input-row">
-                <input
-                  id="refSearchTerm"
-                  value={refSearchTerm}
-                  onChange={(e) => setRefSearchTerm(e.target.value)}
-                  placeholder="OI-51462"
-                />
-                <button className="btn primary" type="button" onClick={handleRefSearch} disabled={refSearching}>
-                  {refSearching ? 'Searching...' : 'Search'}
-                </button>
-              </div>
-            </div>
-
-            <div className="field">
-              <label htmlFor="selectedBL">BL / HAWB</label>
-              <p className="field-hint">Select the returned house bill to set Bill To.</p>
-              <select
-                id="selectedBL"
-                className="field-select"
-                value={selectedBL}
-                onChange={(e) => handleBLChange(e.target.value)}
-                disabled={!blOptions.length}
-              >
-                <option value="">Select BL</option>
-                {blOptions.map((bl) => (
-                  <option key={bl} value={bl}>{bl}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-          {refLookupError && <div className="save-error" role="alert">{refLookupError}</div>}
-        </section>
-
         <section className="panel builder-form">
           <header className="panel-heading">
             <div>

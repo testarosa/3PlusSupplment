@@ -1,11 +1,11 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { login, selectAuth, logout } from "../store/slices/authSlice";
+import { login, selectAuth } from "../store/slices/authSlice";
 import "./Login.css";
 
 export default function Login({ onSuccess } = {}) {
   const dispatch = useDispatch();
-  const { token, user, loading, error } = useSelector(selectAuth);
+  const { loading, error } = useSelector(selectAuth);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [formErrors, setFormErrors] = useState({});
@@ -20,20 +20,13 @@ export default function Login({ onSuccess } = {}) {
       const resultAction = await dispatch(login({ username, password }));
       if (login.fulfilled.match(resultAction)) {
         // login succeeded
-        console.log("Logged in:", resultAction.payload);
         if (typeof onSuccess === "function") {
           onSuccess(resultAction.payload?.user ?? null);
         }
-      } else {
-        console.log("Login failed:", resultAction.payload);
       }
     } catch (err) {
       console.error("Login error", err);
     }
-  };
-
-  const handleLogout = () => {
-    dispatch(logout());
   };
 
   function validate() {
@@ -51,74 +44,44 @@ export default function Login({ onSuccess } = {}) {
   }
 
   return (
-    <div className="login-card">
-      {token ? (
-        <div>
-          <h2>Welcome</h2>
-          <p>
-            Signed in as{" "}
-            <strong>{user?.name || user?.username || "User"}</strong>
-          </p>
-          <div className="login-actions">
-            <button className="btn btn-secondary" onClick={handleLogout}>
-              Logout
-            </button>
-          </div>
-        </div>
-      ) : (
-        <form className="login-form" onSubmit={onSubmit}>
-          <h2>Sign in</h2>
-          <div className="form-row">
-            <label>Username</label>
-            <input
-              className="input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              aria-invalid={!!formErrors.username}
-            />
-            {formErrors.username && (
-              <div className="field-error">{formErrors.username}</div>
-            )}
-          </div>
-          <div className="form-row">
-            <label>Password</label>
-            <input
-              className="input"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-            {formErrors.password && (
-              <div className="field-error">{formErrors.password}</div>
-            )}
-          </div>
-          <div className="login-actions">
-            <button
-              type="button"
-              className="btn btn-secondary"
-              onClick={() => {
-                setUsername("");
-                setPassword("");
-              }}
-            >
-              Clear
-            </button>
-            <button
-              type="submit"
-              className="btn btn-primary"
-              disabled={loading}
-            >
-              {loading ? "Logging..." : "Login"}
-            </button>
-          </div>
-          {error && (
-            <div className="login-error">
-              {error.message || JSON.stringify(error)}
-            </div>
-          )}
-      
-        </form>
-      )}
-    </div>
+    <form className="login-card login-form" onSubmit={onSubmit}>
+      <div className="form-row">
+        <label htmlFor="portal-username">Username</label>
+        <input
+          id="portal-username"
+          className="input"
+          autoComplete="username"
+          value={username}
+          onChange={(e) => setUsername(e.target.value)}
+          aria-invalid={!!formErrors.username}
+          aria-describedby={formErrors.username ? "portal-username-error" : undefined}
+        />
+        {formErrors.username && (
+          <div id="portal-username-error" className="field-error">{formErrors.username}</div>
+        )}
+      </div>
+      <div className="form-row">
+        <label htmlFor="portal-password">Password</label>
+        <input
+          id="portal-password"
+          className="input"
+          type="password"
+          autoComplete="current-password"
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          aria-invalid={!!formErrors.password}
+          aria-describedby={formErrors.password ? "portal-password-error" : undefined}
+        />
+        {formErrors.password && (
+          <div id="portal-password-error" className="field-error">{formErrors.password}</div>
+        )}
+      </div>
+      <div className="login-actions">
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          {loading ? "Signing in..." : "Sign in"}
+        </button>
+      </div>
+      {error && <div className="login-error" role="alert">{error.message || JSON.stringify(error)}</div>}
+    </form>
   );
 }

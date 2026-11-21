@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { API_BASE_URL, buildApiUrl } from './config'
+import { API_BASE_URL, PORTAL_API_PATH, buildApiUrl } from './config'
 
 // Shared axios instance pinned to the on-prem API base.
 const baseURL = API_BASE_URL
@@ -14,12 +14,15 @@ const buildLoginUrlWithQuery = (username, password) => {
 }
 
 const api = axios.create({
-  baseURL,
+  baseURL: PORTAL_API_PATH ? undefined : baseURL,
   headers: { 'Content-Type': 'application/json' },
   withCredentials: false,
 })
 
 export async function login({ username, password, url }) {
+  if (PORTAL_API_PATH && !url) {
+    return api.post(`${PORTAL_API_PATH}/session/login`, { username, password })
+  }
   // If a full url is provided and contains query params ("?"), perform a GET request
   // allowing backends that expect credentials in the query string.
   // Otherwise default to POST to the given endpoint (or `/api/login`).
@@ -45,6 +48,10 @@ export async function login({ username, password, url }) {
   
   // Default: POST with username/password payload
   return api.post(endpoint, { username, password })
+}
+
+export async function endPortalSession() {
+  if (PORTAL_API_PATH) await api.post(`${PORTAL_API_PATH}/session/logout`, null, { timeout: 5000 })
 }
 
 export default api

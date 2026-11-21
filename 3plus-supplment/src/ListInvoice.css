@@ -1,8 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 .invoice-list-page {
-    width:1700px;
-    
+  width: 100%;
   --ink: #031927;
   --muted: #4b5563;
   --surface: rgba(255, 255, 255, 0.92);
@@ -13,28 +12,12 @@
   --soft-shadow: 0 24px 55px rgba(3, 25, 39, 0.08);
   font-family: 'Space Grotesk', 'Segoe UI', sans-serif;
   color: var(--ink);
-  background:
-    radial-gradient(120% 120% at 0% 0%, rgba(14, 165, 150, 0.18), transparent 60%),
-    radial-gradient(120% 120% at 100% 0%, rgba(255, 125, 0, 0.18), transparent 55%),
-    linear-gradient(135deg, #fdf8f1 0%, #f3fcff 60%, #eef8ff 100%);
-  border-radius: 20px;
-  padding: 1.75rem;
-  box-shadow: var(--soft-shadow);
   display: flex;
   flex-direction: column;
   gap: 1.35rem;
   position: relative;
   overflow: hidden;
   box-sizing: border-box;
-}
-
-.invoice-list-page::before {
-  content: '';
-  position: absolute;
-  inset: 18px;
-  border-radius: 16px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  pointer-events: none;
 }
 
 .invoice-list-page > * {
@@ -72,7 +55,6 @@
   grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
   gap: 1.5rem;
   background: linear-gradient(120deg, rgba(14, 165, 150, 0.15), rgba(255, 125, 0, 0.12));
-  height: 80px
 }
 
 .hero-copy h2 {
@@ -474,9 +456,6 @@
 }
 
 @media (max-width: 720px) {
-  .invoice-list-page {
-    padding: 1.2rem;
-  }
   .form-actions {
     flex-direction: column;
     align-items: stretch;

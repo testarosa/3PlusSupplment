@@ -1,5 +1,37 @@
 @import "./CreateInvoice.css";
 
+.crdr-create-page .crdr-source-grid {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+	gap: 1rem;
+}
+
+.crdr-create-page .crdr-source-card {
+	display: grid;
+	align-content: start;
+	justify-items: start;
+	gap: 0.75rem;
+	min-width: 0;
+	padding: 1rem;
+	border: 1px solid var(--portal-line);
+	border-radius: 8px;
+	background: var(--portal-paper);
+}
+
+.crdr-create-page .crdr-source-card h4 {
+	margin: 0;
+	font: 700 1.4rem/1.1 var(--portal-display);
+}
+
+.crdr-create-page .crdr-source-card > p {
+	margin: 0;
+	color: var(--portal-muted);
+}
+
+.crdr-create-page .crdr-source-card .field {
+	width: 100%;
+}
+
 .create-invoice-page .invoice-hero {
 	grid-template-columns: 1fr;
 	gap: 0.75rem;

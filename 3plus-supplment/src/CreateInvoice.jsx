@@ -93,9 +93,12 @@ const getInvoiceFreightType = (payload = {}) => {
     payload?.frightType ??
     payload?.FrightType ??
     payload?.tOIMMainDto?.freightType ??
-    payload?.tAIMMain?.freightType;
+    payload?.tOOMMain?.freightType ??
+    payload?.tAIMMain?.freightType ??
+    payload?.tAOMMain?.freightType;
   if (explicit) return String(explicit).trim().toUpperCase();
   if (payload?.tOIMMainDto || Array.isArray(payload?.tOIHMainDtos)) return "OI";
+  if (payload?.tOOMMain || Array.isArray(payload?.tOOHMains)) return "OO";
   if (
     payload?.tAIMMain ||
     payload?.tAIMMainDto ||
@@ -103,6 +106,7 @@ const getInvoiceFreightType = (payload = {}) => {
   ) {
     return "AI";
   }
+  if (payload?.tAOMMain || Array.isArray(payload?.tAOHMains)) return "AO";
   return "OI";
 };
 
@@ -340,6 +344,9 @@ function CreateInvoice({
   const [selectedRef, setSelectedRef] = useState(initialData?.ref ?? "");
   const [refLookupError, setRefLookupError] = useState(null);
   const [refSearching, setRefSearching] = useState(false);
+  const [billingFreightType, setBillingFreightType] = useState(
+    initialData?.freightTypeCode ?? initialData?.freightType ?? "",
+  );
 
   // After a ref lookup, optionally auto-populate invoice items from templates once bill-to is known.
   const [autoPopulateAfterRef, setAutoPopulateAfterRef] = useState(false);
@@ -573,6 +580,7 @@ function CreateInvoice({
         payload = payload.data;
       }
       const lookupFreightType = getInvoiceFreightType(payload);
+      setBillingFreightType(lookupFreightType);
 
       // Populate invoice items from the lookup payload when present.
       const extractedLines = extractInvoiceLineItemsFromLookup(payload);
@@ -949,7 +957,10 @@ function CreateInvoice({
     }
 
     try {
-      const templates = await loadTemplatesForBillTo(normalizedBillToId);
+      const templates = await loadTemplatesForBillTo(
+        normalizedBillToId,
+        billingFreightType || "OI",
+      );
       const template =
         Array.isArray(templates) && templates.length ? templates[0] : null;
       if (!template || !template.items?.length) {
@@ -991,6 +1002,9 @@ function CreateInvoice({
 
     setBillTo(template.customerName || template.billToName || "");
     setSelectedCustomerId(template.customerId ?? template.billTo ?? null);
+    if (template.freightTypeCode || template.freightType) {
+      setBillingFreightType(template.freightTypeCode ?? template.freightType);
+    }
 
     const templateTerm = Number(template.netTerm ?? template.term);
     if (!Number.isNaN(templateTerm) && templateTerm >= 0) {
@@ -1203,7 +1217,8 @@ function CreateInvoice({
     // Best-effort preload so autocomplete can show something immediately.
     (async () => {
       try {
-        const results = await getBillingCodes("");
+        setBillingCodeBootstrapped(false);
+        const results = await getBillingCodes("", billingFreightType || "OI");
         if (!alive) return;
         const normalized = normalizeCodes(results);
         setBillingCodeOptions(normalized);
@@ -1217,7 +1232,7 @@ function CreateInvoice({
     return () => {
       alive = false;
     };
-  }, []);
+  }, [billingFreightType]);
 
   useEffect(() => {
     return () => {
@@ -1292,7 +1307,7 @@ function CreateInvoice({
 
     billingDebounce.current[id] = setTimeout(async () => {
       try {
-        const results = await getBillingCodes(q);
+        const results = await getBillingCodes(q, billingFreightType || "OI");
         let list = (results || []).map((it) => ({
           code: (it?.value ?? it?.code ?? "").toString().trim(),
           desc: (it?.name ?? it?.description ?? it?.desc ?? "")
