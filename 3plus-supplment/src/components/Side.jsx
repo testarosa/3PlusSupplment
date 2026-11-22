@@ -11,11 +11,15 @@ const CreateCrdrTemplate = lazy(() => import('../CreateCrdrTemplate'))
 const EditCrdrTemplate = lazy(() => import('../EditCrdrTemplate'))
 const CreateInvoice = lazy(() => import('../CreateInvoice'))
 const CreateCrdr = lazy(() => import('../CreateCrdr'))
+const CreateApInvoice = lazy(() => import('../CreateApInvoice'))
+const ListApInvoices = lazy(() => import('../ListApInvoices'))
+const EditApInvoice = lazy(() => import('../EditApInvoice'))
 const EditInvoice = lazy(() => import('../EditInvoice'))
 const EditCrdr = lazy(() => import('../EditCrdr'))
 
 const modules = [
   { title: 'Invoices', icon: 'invoice', path: '/invoices', description: 'Find invoices and prepare freight charges for billing.', action: 'New invoice' },
+  { title: 'AP Invoices', icon: 'invoice', path: '/ap-invoices', description: 'Find vendor invoice drafts or prepare an invoice against a shipment.', action: 'Prepare AP invoice' },
   { title: 'Credit / Debit Notes', icon: 'notes', path: '/crdr', description: 'Review adjustments and prepare credit or debit charges.', action: 'New credit / debit note' },
   { title: 'Invoice Templates', icon: 'template', path: '/templates', description: 'Manage reusable invoice lines and customer billing defaults.', action: 'New invoice template' },
   { title: 'Credit / Debit Templates', icon: 'template', path: '/crdr-templates', description: 'Manage reusable credit and debit lines by agent.', action: 'New credit / debit template' },
@@ -37,12 +41,12 @@ function Overview() {
       <section className="overview-modules" aria-label="Billing tools">
         <h2>Billing tools</h2>
         <div className="overview-grid">
-          {modules.map(({ title, icon, path, description, action }) => (
+          {modules.map(({ title, icon, path, createPath = path + '/create', description, action }) => (
             <article className="overview-card" key={path}>
               <span className="overview-card-icon"><PortalIcon name={icon} /></span>
               <h3><Link to={path}>{title}</Link></h3>
               <p>{description}</p>
-              <Link className="overview-card-action" to={`${path}/create`}>{action}</Link>
+              <Link className="overview-card-action" to={createPath}>{action}</Link>
             </article>
           ))}
         </div>
@@ -59,6 +63,10 @@ function Side({ location, navigate, EditWrapper }) {
         <Route path="/invoices" element={<ListInvoice />} />
         <Route path="/invoices/create" element={<CreateInvoice />} />
         <Route path="/invoices/edit/:id" element={<EditInvoice />} />
+        <Route path="/ap-invoices" element={<ListApInvoices />} />
+        <Route path="/ap-invoices/create" element={<CreateApInvoice key="create" />} />
+        <Route path="/ap-invoices/edit/:id" element={<CreateApInvoice key="edit" />} />
+        <Route path="/ap-invoices/records/:id/edit" element={<EditApInvoice />} />
         <Route path="/crdr" element={<ListCrdr />} />
         <Route path="/crdr/create" element={<CreateCrdr />} />
         <Route path="/crdr/edit/:id" element={<EditCrdr />} />

@@ -194,7 +194,7 @@ function EditCrdr() {
 					</div>
 				</div>
 
-				<div className="table-wrapper">
+				<div className="table-wrapper" role="region" aria-label="Credit and debit charge lines" tabIndex={0}>
 					<table className="templates-table">
 						<thead>
 							<tr>

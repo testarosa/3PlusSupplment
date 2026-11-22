@@ -222,7 +222,7 @@ export default function EditInvoice() {
               </div>
             </header>
 
-            <div className="line-table-wrapper">
+            <div className="line-table-wrapper" role="region" aria-label="Invoice charge lines" tabIndex={0}>
               <table className="line-table">
                 <thead>
                   <tr>

@@ -1,0 +1,218 @@
+.billing-document-preview {
+  --preview-inset: clamp(.75rem, 2vw, 1.2rem);
+  display: grid;
+  min-width: 0;
+  width: 100%;
+  border: 1px solid var(--portal-line);
+  border-radius: 10px;
+  background: var(--portal-surface);
+  overflow-wrap: anywhere;
+}
+
+.billing-preview-header,
+.billing-preview-reconcile,
+.billing-preview-charge-heading,
+.billing-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: start;
+  justify-content: space-between;
+  gap: .5rem 1rem;
+}
+
+.billing-preview-header {
+  padding: var(--preview-inset);
+  border-radius: 9px 9px 0 0;
+  background: linear-gradient(110deg, #f8f4e8, #edf0e7);
+}
+
+.billing-preview-header h4 {
+  margin: .2rem 0;
+  font: 700 clamp(1.55rem, 3vw, 2rem)/1.05 var(--portal-display);
+}
+
+.billing-preview-kicker,
+.billing-preview-facts dt,
+.billing-preview-totals dt {
+  color: var(--portal-muted);
+  font-size: .75rem;
+  font-weight: 700;
+  letter-spacing: .04em;
+}
+
+.billing-preview-kicker {
+  text-transform: uppercase;
+}
+
+.billing-preview-header p,
+.billing-preview-check p {
+  margin: 0;
+  color: var(--portal-muted);
+  font-size: .875rem;
+}
+
+.billing-preview-header p span {
+  padding-inline: .25rem;
+}
+
+.billing-preview-badge {
+  display: inline-block;
+  padding: .2rem .55rem;
+  border-radius: 1rem;
+  background: #e9ebe3;
+  color: var(--portal-forest);
+  font-size: .75rem;
+  font-weight: 700;
+}
+
+.billing-preview-badge[data-tone="success"] {
+  background: #e0eddf;
+  color: #254e30;
+}
+
+.billing-preview-badge[data-tone="warning"] {
+  background: var(--portal-tint);
+  color: #853818;
+}
+
+.billing-preview-facts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: .75rem 1rem;
+  margin: 0;
+  padding: var(--preview-inset);
+  border-block: 1px solid var(--portal-line);
+}
+
+.billing-preview-facts dd,
+.billing-preview-totals dd {
+  margin: .15rem 0 0;
+  font-weight: 700;
+}
+
+.billing-preview-facts dd[data-missing],
+.billing-preview-missing {
+  color: var(--portal-muted);
+  font-size: .8rem;
+  font-weight: 400;
+}
+
+.billing-preview-charges {
+  padding: var(--preview-inset);
+}
+
+.billing-preview-charge-heading {
+  align-items: center;
+  margin-bottom: .5rem;
+}
+
+.billing-preview-charge-heading h5 {
+  margin: 0;
+  font: 700 1.2rem var(--portal-display);
+}
+
+.billing-preview-charge-heading h5 span {
+  margin-inline-start: .25rem;
+  color: var(--portal-muted);
+  font: 600 .8rem var(--portal-font);
+}
+
+.billing-preview-default-code {
+  display: grid;
+  gap: .3rem;
+  margin-bottom: .75rem;
+}
+
+.billing-preview-default-code label {
+  font-size: .875rem;
+  font-weight: 700;
+}
+
+.billing-preview-code-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .4rem;
+}
+
+.billing-preview-code-controls input {
+  width: min(100%, 20rem);
+}
+
+.billing-preview-default-code p {
+  margin: 0;
+  color: var(--portal-muted);
+  font-size: .8rem;
+}
+
+.billing-preview-charges table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.billing-preview-charges :is(th, td) {
+  padding: .45rem clamp(.3rem, 1vw, .75rem);
+  text-align: start;
+  vertical-align: top;
+  border-bottom: 1px solid var(--portal-line);
+}
+
+.billing-preview-charges th {
+  font-size: .75rem;
+}
+
+.billing-preview-charges .billing-preview-money {
+  text-align: end;
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-preview-reconcile {
+  padding: 0 var(--preview-inset) var(--preview-inset);
+}
+
+.billing-preview-check {
+  flex: 1 1 13rem;
+  display: grid;
+  justify-items: start;
+  gap: .4rem;
+}
+
+.billing-preview-check .billing-preview-warning {
+  color: #853818;
+}
+
+.billing-preview-totals {
+  flex: 0 1 auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: .65rem 1.25rem;
+  margin: 0;
+  padding: .65rem .85rem;
+  border: 1px solid var(--portal-line);
+  border-radius: 8px;
+  background: var(--portal-paper);
+  font-variant-numeric: tabular-nums;
+}
+
+.billing-preview-totals dd {
+  font-size: 1.05rem;
+}
+
+.billing-preview-actions {
+  justify-content: flex-end;
+  padding: .65rem var(--preview-inset);
+  border-top: 1px solid var(--portal-line);
+}
+
+@media (max-width: 480px) {
+  .billing-preview-facts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .billing-preview-actions .btn {
+    flex: 1 1 100%;
+  }
+
+  .billing-preview-totals {
+    width: 100%;
+  }
+}

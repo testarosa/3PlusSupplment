@@ -1,5 +1,5 @@
 import axios from "axios";
-import { buildInvoiceApiUrl } from "./config";
+import { PLUS_SERVICE_PATH, buildInvoiceApiUrl } from "./config";
 
 export async function getInvoiceByRef(referenceNumber) {
   if (!referenceNumber) {
@@ -74,41 +74,43 @@ export async function saveInvoice(invoiceData) {
   return data;
 }
 
-export async function searchInvoices(filters = {}) {
-  const params = new URLSearchParams();
+export const supportsInvoiceUserSearch = Boolean(PLUS_SERVICE_PATH);
 
-  Object.entries({
-    userName: filters.userName,
-    invoiceNo: filters.invoiceNo,
-    customerName: filters.customerName,
-    invoiceFrom: filters.invoiceFrom,
-    invoiceTo: filters.invoiceTo,
-  }).forEach(([key, value]) => {
-    if (value !== undefined && value !== null && String(value).trim().length) {
-      params.append(key, value);
-    }
-  });
-
-  const query = params.toString();
-  const endpoint = buildInvoiceApiUrl(
-    query ? `/Invoice/SearchInvoices?${query}` : '/Invoice/SearchInvoices'
-  );
-
-  const resp = await axios.get(endpoint, {
-    headers: { accept: 'text/plain, application/json' },
-  });
-
-  let data = resp?.data;
-
-  if (typeof data === 'string') {
-    try {
-      data = JSON.parse(data);
-    } catch (err) {
-      // leave as string if parsing fails
-    }
+export async function searchInvoices(filters, page, pageSize, signal) {
+  const supplied = (value) => value?.trim() || undefined;
+  const params = {
+    userName: supplied(filters.userName),
+    customerName: supplied(filters.customerName),
+    invoiceFrom: supplied(filters.invoiceFrom),
+    invoiceTo: supplied(filters.invoiceTo),
+  };
+  if (supportsInvoiceUserSearch) {
+    const { data } = await axios.get(PLUS_SERVICE_PATH + '/api/accounts-receivable/invoices', {
+      params: { ...params, invoiceNumber: supplied(filters.invoiceNo), page, pageSize },
+      signal, timeout: 30_000,
+    });
+    if (!Array.isArray(data?.items) || !Number.isInteger(data.totalCount) || !Number.isInteger(data.totalPages))
+      throw new Error('The billing service returned an unexpected invoice list.');
+    return {
+      ...data,
+      items: data.items.map((row) => ({
+        ...row,
+        invoiceId: row.id, invoiceNo: row.invoiceNumber,
+        companyId: row.billToCompanyId, companyName: row.billToCompanyName,
+      })),
+    };
   }
 
-  return data;
+  const { data } = await axios.get(buildInvoiceApiUrl('/Invoice/SearchInvoices'), {
+    params: { ...params, invoiceNo: supplied(filters.invoiceNo) },
+    headers: { accept: 'text/plain, application/json' },
+    signal, timeout: 30_000,
+  });
+  const payload = typeof data === 'string' ? JSON.parse(data) : data;
+  const rows = Array.isArray(payload) ? payload : payload?.data;
+  if (!Array.isArray(rows)) throw new Error('The billing service returned an unexpected invoice list.');
+  const offset = (page - 1) * pageSize;
+  return { items: rows.slice(offset, offset + pageSize), totalCount: rows.length, totalPages: Math.ceil(rows.length / pageSize) };
 }
 
 export async function deleteInvoice(invoiceId) {

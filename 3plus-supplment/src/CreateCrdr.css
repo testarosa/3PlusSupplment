@@ -18,9 +18,17 @@
 	background: var(--portal-paper);
 }
 
-.crdr-create-page .crdr-source-card h4 {
+.crdr-create-page .crdr-source-card > h4 {
 	margin: 0;
 	font: 700 1.4rem/1.1 var(--portal-display);
+}
+
+.crdr-create-page .crdr-bill-notice {
+	padding: .6rem .8rem;
+	border-inline-start: 3px solid var(--portal-orange);
+	background: var(--portal-tint);
+	color: var(--portal-ink);
+	overflow-wrap: anywhere;
 }
 
 .crdr-create-page .crdr-source-card > p {

@@ -4,6 +4,8 @@ const DEFAULT_API_BASE_URL = 'http://api.e3pl.com/'
 export const PORTAL_API_PATH =
   globalThis.location?.origin === "https://e3pl.com" ? "/portal-api" : "";
 
+export const PLUS_SERVICE_PATH = import.meta.env?.DEV ? "/ap-backend" : PORTAL_API_PATH;
+
 const pickEnvUrl = (value, fallback) =>
   typeof value === "string" && value.trim().length ? value.trim() : fallback;
 

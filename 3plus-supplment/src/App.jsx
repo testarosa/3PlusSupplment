@@ -7,6 +7,7 @@ import { PortalIcon, portalSections } from './components/PortalNav'
 import { logout, selectAuth } from './store/slices/authSlice'
 import { endPortalSession } from './api/auth'
 import './App.css'
+import './Billing.css'
 
 function Brand() {
   return (
@@ -47,7 +48,7 @@ function App() {
     .map((part) => part[0]).join('').toUpperCase() || 'U'
   const activeSection = portalSections.flatMap((group) => group.links)
     .find(({ to }) => pathname === to || pathname.startsWith(`${to}/`))
-  const action = pathname.endsWith('/create') ? 'Create' : pathname.includes('/edit/') ? 'Edit' : ''
+  const action = pathname.endsWith('/create') ? 'Create' : /\/edit(?:\/|$)/.test(pathname) ? 'Edit' : ''
 
   const signOut = () => {
     void endPortalSession().catch(() => {})
@@ -91,7 +92,8 @@ function App() {
             {action && <><span aria-hidden="true">/</span><strong>{action}</strong></>}
           </div>
         </header>
-        <main id="workspace-content" className="workspace-content">
+        <main id="workspace-content" className="workspace-content"
+          data-billing={['/invoices', '/ap-invoices', '/crdr'].includes(activeSection?.to) || undefined}>
           <Dashboard embedLayout />
         </main>
       </div>

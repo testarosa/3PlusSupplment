@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../crdrExtractionContract.json" LogicalName="CrdrExtractionContract" />
+    <EmbeddedResource Include="../apInvoiceExtractionContract.json" LogicalName="ApInvoiceExtractionContract" />
   </ItemGroup>
 </Project>

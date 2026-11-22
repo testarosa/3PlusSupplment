@@ -5,12 +5,19 @@ import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import "./CreateCrdr.css";
 import { searchAgentCompaniesByName } from "./api/agentCompanies";
-import { extractCrdrDocument, getCrdrByRefNumber, saveCrdr } from "./api/crdrs";
+import { extractCrdrDocument, findCrdrAirShipment, getCrdrByRefNumber, saveCrdr } from "./api/crdrs";
 import { PORTAL_API_PATH } from "./api/config";
 import { getCrdrTemplateByAgentId } from "./api/ListCrdrTemplate";
 import { selectAuth } from "./store/slices/authSlice";
+import DocumentDropzone from "./components/DocumentDropzone";
+import CrdrDocumentPreview from "./components/CrdrDocumentPreview";
+import { normalizeShipmentBill } from "./shipmentBill";
+import { chooseCrdrAirBill, chooseCrdrShipmentBill, getCrdrAirBills } from "./crdrShipmentSelection";
+import { getCrdrCreateBlocker, getCrdrCurrencyBlocker, getCrdrHouseBillNotice } from "./crdrReview";
+import { getCrdrPaymentTerms } from "./crdrTerms";
 
 const extractionEnabled = import.meta.env.DEV || (PORTAL_API_PATH && import.meta.env.VITE_CRDR_AI_ENABLED === "true");
+const airImportEnabled = import.meta.env.VITE_CRDR_AIR_IMPORT_ENABLED === "true" && (import.meta.env.DEV || Boolean(PORTAL_API_PATH));
 
 const DatePickerPopperContainer = ({ children }) => {
 	if (typeof document === "undefined") return children;
@@ -136,6 +143,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 	const [resolvedReference, setResolvedReference] = useState("");
 	const [documentFile, setDocumentFile] = useState(null);
 	const [documentDraft, setDocumentDraft] = useState(null);
+	const [documentApplied, setDocumentApplied] = useState(false);
 	const [documentError, setDocumentError] = useState(null);
 	const [extractingDocument, setExtractingDocument] = useState(false);
 	const [preparedSource, setPreparedSource] = useState(null);
@@ -150,12 +158,11 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 	const [invoiceDate, setInvoiceDate] = useState(
 		parseDate(initialData?.invoiceDate) ?? new Date()
 	);
-	const [dueDate, setDueDate] = useState(parseDate(initialData?.dueDate) ?? null);
-	const [netTerm, setNetTerm] = useState(() => {
-		if (initialData?.netTerm === 0) return 0;
-		if (initialData?.netTerm) return Number(initialData.netTerm) || 0;
-		return "";
+	const initialTerms = () => getCrdrPaymentTerms(invoiceDate, {
+		dueDate: parseDate(initialData?.dueDate), term: initialData?.netTerm,
 	});
+	const [dueDate, setDueDate] = useState(() => initialTerms().dueDate);
+	const [netTerm, setNetTerm] = useState(() => initialTerms().term);
 	const [crdrNumber, setCrdrNumber] = useState(
 		initialData?.crdrNo ?? initialData?.crdrNumber ?? ""
 	);
@@ -205,8 +212,11 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		setTemplateKey("");
 		setTemplateOptions([]);
 		setTemplateError(null);
-		setNetTerm("");
-		setDueDate(null);
+		const today = new Date();
+		const payment = getCrdrPaymentTerms(today);
+		setInvoiceDate(today);
+		setNetTerm(payment.term);
+		setDueDate(payment.dueDate);
 		setCrdrNumber("");
 		setItems([createLine({ id: "seed-0" })]);
 	}, []);
@@ -229,6 +239,10 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		};
 
 		const buildPayload = () => {
+			const payment = getCrdrPaymentTerms(invoiceDate, { dueDate, term: netTerm });
+			const air = refPayload?.airImport;
+			const airBill = air?.bills.find((bill) => bill.billNumber === selectedBL);
+			if (air && !airBill) throw new Error("Select an air import airway bill.");
 			const master = refPayload?.tOIMMainDto ?? null;
 			const houses = Array.isArray(refPayload?.tOIHMainDtos)
 				? refPayload.tOIHMainDtos
@@ -239,8 +253,8 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			);
 
 			const target = match ?? null;
-			const tbName = target ? "T_OIHMAIN" : master ? "T_OIMMAIN" : "T_OIHMAIN";
-			const tBid = target?.fId ?? master?.fId ?? 0;
+			const tbName = airBill?.table ?? (target ? "T_OIHMAIN" : master ? "T_OIMMAIN" : "T_OIHMAIN");
+			const tBid = airBill?.id ?? target?.fId ?? master?.fId ?? 0;
 
 			const now = new Date();
 			const details = items.map((it) => ({
@@ -258,6 +272,7 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			}));
 
 			return {
+				...(air ? { airImportReference: air.referenceNumber } : {}),
 				tOIMMainDto: master,
 				tOIHMainDtos: houses,
 				tCompany: refPayload?.tCompany ?? null,
@@ -270,8 +285,8 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 					fCurrency: "USD",
 					fCrDbNo: (crdrNumber || "").toString(),
 					fInvoiceDate: toDateString(invoiceDate) ?? toDateString(now),
-					fTerms: netTerm === "" ? 0 : Number(netTerm) || 0,
-					fDueDate: toDateString(dueDate),
+					fTerms: Number(netTerm === "" ? payment.term : netTerm) || 0,
+					fDueDate: toDateString(payment.dueDate),
 					fTotal: subtotal,
 					fPaidAmt: 0,
 					fCheckNo: "",
@@ -320,18 +335,9 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 	};
 
 	const handleAutoPopulateHeader = () => {
-		const baseDate = invoiceDate instanceof Date ? invoiceDate : new Date();
-		if (!netTerm && netTerm !== 0) {
-			setNetTerm(30);
-			const due = new Date(baseDate);
-			due.setDate(due.getDate() + 30);
-			setDueDate(due);
-		} else if (Number.isFinite(Number(netTerm)) && !dueDate) {
-			const term = Number(netTerm) || 0;
-			const due = new Date(baseDate);
-			due.setDate(due.getDate() + term);
-			setDueDate(due);
-		}
+		const payment = getCrdrPaymentTerms(invoiceDate, { dueDate, term: netTerm });
+		setNetTerm(payment.term);
+		setDueDate(payment.dueDate);
 
 		if (!crdrNumber) {
 			const seed = (refSearchTerm || selectedBL || "CRDR").toString().trim();
@@ -414,7 +420,6 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 			setAgentAc({ list: [], index: -1, visible: false, loading: false, query: "" });
 			return;
 		}
-
 		if (query.length < 2) {
 			setAgentAc({ list: [], index: -1, visible: false, loading: false, query });
 			return;
@@ -441,45 +446,87 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 
 	const handleRefChange = (value) => {
 		setRefSearchTerm(value);
+		setRefLookupError(null);
 	};
 
 	const handleBlChange = (value) => {
 		setSelectedBL(value);
 		if (preparedSource) return;
-		setNetTerm("");
-		setDueDate(null);
+		const payment = getCrdrPaymentTerms(invoiceDate);
+		setNetTerm(payment.term);
+		setDueDate(payment.dueDate);
 		setCrdrNumber("");
 		setItems([createLine({ id: "seed-0" })]);
 	};
 
-	const doRefSearch = async (event) => {
-		if (event && event.preventDefault) event.preventDefault();
-		if (refSearching || saveLoading) return;
-		const query = (refSearchTerm || "").trim();
-		setResolvedReference("");
-		if (!query) {
-			setRefLookupError("Reference number is required");
+	const doRefSearch = (event) => {
+		event.preventDefault();
+		if (!refSearching && !extractingDocument && !saveLoading) void lookupShipment(refSearchTerm);
+	};
+
+	const lookupShipment = async (reference, extracted = null, airOnly = false) => {
+		const query = reference.trim().toUpperCase();
+		const resetShipment = () => {
 			setBlList([]);
 			setSelectedBL("");
 			setRefPayload(null);
-			if (!preparedSource) resetCrdrForm();
+			if (preparedSource || extracted) {
+				setAgent(extracted?.agentName?.trim() || preparedSource?.agentName || "");
+				setAgentId(null);
+			} else {
+				resetCrdrForm();
+			}
+		};
+		setRefSearchTerm(query);
+		setResolvedReference("");
+		if (!query) {
+			setRefLookupError("Reference number is required");
+			resetShipment();
+			return;
+		}
+		if (!airImportEnabled && (airOnly || /^AI-?\d/i.test(query))) {
+			resetShipment();
+			setRefLookupError("CR/DR creation supports ocean imports only. Enter an ocean import reference.");
 			return;
 		}
 
 		setRefLookupError(null);
 		setRefSearching(true);
 		try {
-			const response = await getCrdrByRefNumber(query);
-			const payload = response?.data ?? response;
+			let payload = null;
+			if (!airOnly && !/^AI-?\d/i.test(query)) {
+				try {
+					const response = await getCrdrByRefNumber(query);
+					payload = response?.data ?? response;
+				} catch (error) {
+					if (error.response?.status !== 404) throw error;
+				}
+			}
 			const master = payload?.tOIMMainDto ?? null;
 			const houses = Array.isArray(payload?.tOIHMainDtos) ? payload.tOIHMainDtos : [];
 
 			if (!master && !houses.length) {
-				setBlList([]);
-				setSelectedBL("");
-				setRefPayload(null);
-				if (!preparedSource) resetCrdrForm();
-				setRefLookupError("CRDR not found.");
+				let air = airImportEnabled ? await findCrdrAirShipment(query) : null;
+				const extractedBill = extracted?.hblNumber?.trim();
+				if (airImportEnabled && !air && extractedBill && normalizeShipmentBill(extractedBill) !== normalizeShipmentBill(query)) {
+					air = await findCrdrAirShipment(extractedBill);
+				}
+				if (air) {
+					const airReference = air.referenceNumber.trim();
+					const bills = getCrdrAirBills(air);
+					setRefSearchTerm(airReference);
+					setResolvedReference(airReference);
+					setRefPayload({ airImport: { referenceNumber: airReference, bills } });
+					setBlList(bills.map((bill) => bill.billNumber));
+					setSelectedBL(chooseCrdrAirBill(bills, { search: query, reference: airReference, extracted,
+						preparedBill: preparedSource?.reference === airReference ? preparedSource.bl : "" }));
+					setAgent(air.agentName || extracted?.agentName?.trim() || preparedSource?.agentName || "");
+					setAgentId(air.agentId || null);
+					if (!bills.length) setRefLookupError("No unique airway bills were found for this air shipment.");
+					return;
+				}
+				resetShipment();
+				setRefLookupError("Shipment not found for this reference. Check the reference and search again.");
 				return;
 			}
 
@@ -492,27 +539,24 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 				.filter(Boolean);
 
 			const list = [mbl, ...hbls].filter(Boolean);
-			const preferredBl = hbls[0] || mbl || "";
-
 			setBlList([...new Set(list)]);
-			setSelectedBL(preparedSource?.reference === query && list.includes(preparedSource.bl)
-				? preparedSource.bl : preferredBl);
+			setSelectedBL(chooseCrdrShipmentBill({ master: mbl, houses: hbls, extracted,
+				preparedBill: preparedSource?.reference === query ? preparedSource.bl : "" }));
 
 			const company = payload?.tCompany ?? null;
 			const agentName =
 				(company?.fSname || company?.fFname || "").toString().trim();
 			const agentIdValue = company?.fId ?? master?.fAgent ?? null;
-			setAgent(agentName);
+			setAgent(agentName || extracted?.agentName?.trim() || preparedSource?.agentName || "");
 			setAgentId(agentIdValue);
 			if (!list.length) {
 				setRefLookupError("No BL information returned for this reference.");
 			}
 		} catch (err) {
-			setBlList([]);
-			setSelectedBL("");
-			setRefPayload(null);
-			if (!preparedSource) resetCrdrForm();
-			setRefLookupError(getErrorMessage(err, "Unable to load CRDR details"));
+			resetShipment();
+			setRefLookupError(err.response?.status === 404
+				? "Shipment not found for this reference. Check the reference and search again."
+				: getErrorMessage(err, "Unable to look up the shipment."));
 		} finally {
 			setRefSearching(false);
 		}
@@ -557,9 +601,9 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		};
 	}, [templateAgentId]);
 
-	const isPrepared = Boolean(hasShipment && preparedSource?.reference === resolvedReference && preparedSource?.bl === selectedBL);
-	const prepareSource = (kind, label) => {
-		setPreparedSource({ kind, label, reference: resolvedReference, bl: selectedBL });
+	const isPrepared = Boolean(preparedSource);
+	const prepareSource = (kind, label, fields = {}) => {
+		setPreparedSource({ kind, label, reference: resolvedReference, bl: selectedBL, ...fields });
 		setSaveSuccess(null);
 		setSaveError(null);
 	};
@@ -567,35 +611,41 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 	const selectedTemplate = templateOptions.find((template, index) => getTemplateOptionKey(template, index) === templateKey);
 	const populateTemplate = () => {
 		if (!hasShipment || !selectedTemplate || templateLoading || saveLoading || extractingDocument) return;
-		const term = selectedTemplate.term == null ? "" : Number(selectedTemplate.term) || 0;
-		const due = new Date(invoiceDate ?? Date.now());
-		if (term !== "") due.setDate(due.getDate() + term);
-		setNetTerm(term);
-		setDueDate(term === "" ? null : due);
+		const payment = getCrdrPaymentTerms(invoiceDate, { term: selectedTemplate.term });
+		setNetTerm(payment.term);
+		setDueDate(payment.dueDate);
 		setItems(selectedTemplate.details.map((row) => createLine(row)));
 		setDocumentDraft(null);
 		prepareSource("template", selectedTemplate.name ?? selectedTemplate.templateName ?? "Template");
 	};
-	const draftBlocker = !documentDraft ? "" :
-		documentDraft.currency && documentDraft.currency.toUpperCase() !== "USD"
-			? "This form saves in USD. Only USD notes can be imported."
-			: !hasShipment
-				? "Look up the shipment and select its BL before applying the draft."
-				: documentDraft.hblNumber && documentDraft.hblNumber.trim().toUpperCase() !== selectedBL.trim().toUpperCase()
-					? "Select the HBL shown on the note before applying the draft."
-					: "";
+	const draftBlocker = getCrdrCurrencyBlocker(documentDraft);
+
+	const lookupDocumentShipment = async (draft) => {
+		const reference = draft.referenceNumber?.trim();
+		const houseBill = draft.hblNumber?.trim();
+		if (reference) await lookupShipment(reference, draft);
+		else if (airImportEnabled && houseBill && (!hasShipment || normalizeShipmentBill(houseBill) !== normalizeShipmentBill(selectedBL))) {
+			await lookupShipment(houseBill, draft, true);
+		} else if (!hasShipment) {
+			setRefLookupError(airImportEnabled
+				? "No shipment reference or house bill was found on the note. Enter a reference or airway bill and search."
+				: "No shipment reference was found on the note. Enter a reference and search.");
+		}
+	};
 
 	const extractDocument = async () => {
-		if (!extractionEnabled || !hasShipment || !documentFile || extractingDocument || saveLoading) return;
+		if (!extractionEnabled || !documentFile || extractingDocument || refSearching || saveLoading) return;
 		setDocumentError(null);
-		if (!documentFile.size || documentFile.size > 10 * 1024 * 1024) {
-			setDocumentError("Choose a nonempty file of 10 MB or less.");
-			return;
-		}
 		setDocumentDraft(null);
+		setDocumentApplied(false);
 		setExtractingDocument(true);
 		try {
-			setDocumentDraft(await extractCrdrDocument(documentFile));
+			const draft = await extractCrdrDocument(documentFile);
+			setDocumentDraft(draft);
+			if (!isPrepared) {
+				if (!getCrdrCurrencyBlocker(draft)) fillDocument(draft);
+				await lookupDocumentShipment(draft);
+			}
 		} catch (err) {
 			setDocumentError(getErrorMessage(err, "Unable to extract the note."));
 		} finally {
@@ -603,41 +653,65 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 		}
 	};
 
-	const applyDocument = () => {
-		if (!documentDraft || draftBlocker || saveLoading) return;
-		const issueDate = parseDocumentDate(documentDraft.invoiceDate);
-		const paymentDate = parseDocumentDate(documentDraft.dueDate);
-		if (issueDate) setInvoiceDate(issueDate);
-		setDueDate(paymentDate);
-		setNetTerm(issueDate && paymentDate && paymentDate >= issueDate
-			? Math.round((paymentDate - issueDate) / 86_400_000)
-			: "");
-		setItems(documentDraft.lines.map((line) => createLine(line)));
-		prepareSource("import", documentDraft.noteNumber || documentFile?.name || "Imported note");
-		setDocumentDraft(null);
+	const fillDocument = (draft) => {
+		const issueDate = parseDocumentDate(draft.invoiceDate);
+		const payment = getCrdrPaymentTerms(issueDate, { dueDate: parseDocumentDate(draft.dueDate) });
+		setInvoiceDate(issueDate);
+		setDueDate(payment.dueDate);
+		setNetTerm(payment.term);
+		setItems(draft.lines.map((line) => createLine(line)));
+		if (!hasShipment) {
+			setAgent(draft.agentName?.trim() || "");
+			setAgentId(null);
+		}
+		prepareSource("import", draft.noteNumber || documentFile?.name || "Imported note", {
+			houseBill: draft.hblNumber, agentName: draft.agentName?.trim(),
+		});
+		setDocumentApplied(true);
+	};
+
+	const applyDocument = async () => {
+		if (!documentDraft || draftBlocker || saveLoading || extractingDocument || refSearching) return;
+		fillDocument(documentDraft);
+		await lookupDocumentShipment(documentDraft);
 	};
 
 	const discardPreparedCharges = () => {
 		setPreparedSource(null);
 		setItems([createLine({ id: "seed-0" })]);
-		setDueDate(null);
-		setNetTerm("");
+		const payment = getCrdrPaymentTerms(invoiceDate);
+		setDueDate(payment.dueDate);
+		setNetTerm(payment.term);
 		setSaveSuccess(null);
 		setSaveError(null);
+		setDocumentApplied(false);
 	};
 
 	const enterManually = () => {
-		if (!hasShipment || saveLoading || extractingDocument) return;
+		if (saveLoading || extractingDocument || refSearching) return;
 		setItems([createLine({ id: "seed-0" })]);
-		setInvoiceDate(new Date());
-		setDueDate(null);
-		setNetTerm("");
+		const today = new Date();
+		const payment = getCrdrPaymentTerms(today);
+		setInvoiceDate(today);
+		setDueDate(payment.dueDate);
+		setNetTerm(payment.term);
 		setDocumentDraft(null);
 		prepareSource("manual", "Manual entry");
 	};
 
-	const isSaveDisabled = saveLoading || extractingDocument || !isPrepared ||
-		!items.some((line) => line.description.trim() && (toNumber(line.debit) || toNumber(line.credit)));
+	const selectedShipment = { hasShipment, reference: resolvedReference, bill: selectedBL };
+	const reviewBlocker = getCrdrCreateBlocker(preparedSource, {
+		shipment: selectedShipment,
+		agentId, invoiceDate,
+		hasCharge: items.some((line) => line.description.trim() && (toNumber(line.debit) || toNumber(line.credit))),
+	});
+	const isSaveDisabled = saveLoading || extractingDocument || Boolean(reviewBlocker);
+	const showReviewBlocker = !refSearching && !extractingDocument && Boolean(reviewBlocker);
+	const houseBillNotice = getCrdrHouseBillNotice(preparedSource, selectedShipment);
+	const createDescription = [
+		showReviewBlocker && "crdr-create-blocker",
+		houseBillNotice && "crdr-house-bill-notice",
+	].filter(Boolean).join(" ") || undefined;
 
 	return (
 		<div className="create-invoice-page crdr-create-page">
@@ -645,42 +719,80 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 				<div className="hero-copy">
 					<p className="eyebrow">CRDR</p>
 					<h2>{title}</h2>
-					<p>Find the shipment, prepare the charges, and review the credit or debit invoice.</p>
+					<p>Import a note with 3Plus AI or look up the shipment and prepare charges yourself.</p>
 				</div>
+			</section>
+
+			<section className="panel crdr-source-panel">
+				<header className="panel-heading">
+					<div>
+						<h3>1. 3Plus AI</h3>
+						<p>Upload a credit/debit note to extract its charges and search its shipment reference automatically. You can skip this step.</p>
+					</div>
+				</header>
+				<section className="crdr-source-card import-panel">
+					<h4>Import Credit/Debit Note</h4>
+					<p>{extractionEnabled ? "Use 3Plus AI to extract credit and debit lines."
+						: "3Plus AI import is unavailable on this server. Use a template or enter charges manually."}</p>
+					{extractionEnabled && (
+						<>
+							<DocumentDropzone label="Credit/Debit Note file" file={documentFile}
+								disabled={refSearching || extractingDocument || saveLoading}
+								onChange={(selected, validationError = null) => {
+									setDocumentFile(selected);
+									setDocumentDraft(null);
+									setDocumentApplied(false);
+									setDocumentError(validationError);
+								}} />
+							<button className="btn outline" type="button"
+								disabled={!documentFile || refSearching || extractingDocument || saveLoading} onClick={extractDocument}>
+								{extractingDocument ? refSearching ? "Looking up shipment…" : "Extracting…" : "Extract with 3Plus AI"}
+							</button>
+						</>
+					)}
+					{documentError && <div className="inline-error" role="alert">{documentError}</div>}
+					{documentDraft && (
+						<CrdrDocumentPreview draft={documentDraft} blocker={draftBlocker} applied={documentApplied}
+							disabled={saveLoading} applyDisabled={extractingDocument || refSearching} hasCharges={isPrepared}
+							onApply={applyDocument} onDismiss={() => setDocumentDraft(null)} />
+					)}
+				</section>
 			</section>
 
 			<section className="panel ref-panel">
 				<header className="panel-heading">
 					<div>
-						<h3>1. Reference &amp; BL Lookup</h3>
+						<h3>2. Shipment Lookup</h3>
+						<p>{airImportEnabled ? "Confirm the extracted shipment, or search by PLUS reference or air import airway bill."
+							: "Confirm the extracted ocean shipment, or search by its PLUS reference."}</p>
 					</div>
 				</header>
 				<form className="ref-grid" onSubmit={doRefSearch} autoComplete="off">
 					<label className="field span-2">
-						<span>Reference number</span>
+						<span>{airImportEnabled ? "Reference or airway bill" : "Reference number"}</span>
 						<div className="ref-input-row">
 							<input
 								className="input-control"
-								placeholder="Search by reference"
+								placeholder={airImportEnabled ? "Search by reference or air waybill" : "Search by reference"}
 								autoComplete="off"
 								autoCorrect="off"
 								autoCapitalize="off"
 								spellCheck={false}
 								value={refSearchTerm}
-								disabled={refSearching || saveLoading}
+								disabled={refSearching || extractingDocument || saveLoading}
 								onChange={(e) => handleRefChange(e.target.value)}
 							/>
-							<button className="btn primary" type="submit" disabled={refSearching || saveLoading}>
+							<button className="btn primary" type="submit" disabled={refSearching || extractingDocument || saveLoading}>
 								{refSearching ? "Searching…" : "Search"}
 							</button>
 						</div>
 					</label>
 					<label className="field">
-						<span>BL number</span>
+						<span>{refPayload?.airImport ? "Airway bill" : "BL number"}</span>
 						<select
 							className="input-control"
 							value={selectedBL || ""}
-							disabled={refSearching || saveLoading || !blList.length}
+							disabled={refSearching || extractingDocument || saveLoading || !blList.length || resolvedReference !== refSearchTerm.trim()}
 							onChange={(e) => handleBlChange(e.target.value)}
 						>
 							<option value="">Select BL</option>
@@ -692,44 +804,20 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 						</select>
 					</label>
 				</form>
-				{refLookupError && <div className="inline-error">{refLookupError}</div>}
+				{refLookupError && <div className="inline-error" role="alert">{refLookupError}</div>}
+				{!refSearching && !refLookupError && resolvedReference && resolvedReference === refSearchTerm.trim() && blList.length > 0 && (
+					<p role="status">{hasShipment ? "Shipment and bill of lading selected." : "Shipment found. Select a bill of lading to continue."}</p>
+				)}
 			</section>
 
 			<section className="panel crdr-source-panel">
 				<header className="panel-heading">
 					<div>
-						<h3>2. Prepare Charges</h3>
-						<p>{hasShipment ? "Choose one source for the invoice charges." : "Find the shipment and select a BL to continue."}</p>
+						<h3>3. Populate from Template or Manual Entry</h3>
+						<p>Review imported charges, use a template for the selected shipment, or enter charges manually.</p>
 					</div>
 				</header>
 				<div className="crdr-source-grid">
-					<section className="crdr-source-card import-panel">
-						<h4>Import Credit/Debit Note</h4>
-						<p>{extractionEnabled ? "Extract charge lines from a PDF, PNG, or JPEG up to 10 MB with Azure AI." : "Azure AI import is unavailable on this server. Use a template or enter charges manually."}</p>
-						<label className="field">
-							<span>Credit/Debit Note file</span>
-							<input className="input-control" type="file" accept="application/pdf,image/png,image/jpeg"
-								disabled={!extractionEnabled || !hasShipment || extractingDocument || saveLoading} onChange={(event) => {
-									setDocumentFile(event.target.files?.[0] ?? null);
-									setDocumentDraft(null);
-									setDocumentError(null);
-								}} />
-						</label>
-						<button className="btn outline" type="button" disabled={!extractionEnabled || !hasShipment || !documentFile || extractingDocument || saveLoading} onClick={extractDocument}>
-							{extractingDocument ? "Extracting..." : "Extract with Azure AI"}
-						</button>
-						{documentError && <div className="inline-error" role="alert">{documentError}</div>}
-						{documentDraft && (
-							<div className="import-feedback" aria-live="polite">
-								<p>Extracted {documentDraft.noteType} note {documentDraft.noteNumber || ""} ({documentDraft.lines.length} charge lines).</p>
-								<p>Reference: {documentDraft.referenceNumber || "Missing"} | HBL: {documentDraft.hblNumber || "Missing"} | Agent: {documentDraft.agentName || "Missing"} | Currency: {documentDraft.currency || "Verify USD before saving"}</p>
-								{draftBlocker && <p>{draftBlocker}</p>}
-								<button className="btn primary" type="button" disabled={Boolean(draftBlocker) || saveLoading} onClick={applyDocument}>
-									{isPrepared ? "Replace Charges with Imported Lines" : "Use Imported Lines"}
-								</button>
-							</div>
-						)}
-					</section>
 					<section className="crdr-source-card">
 						<h4>Populate from Template</h4>
 						<p>Use a template for the shipment's agent when one is available.</p>
@@ -754,29 +842,117 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 						<h4>Manual Entry</h4>
 						<p>Start with a blank charge line and enter each debit or credit amount yourself.</p>
 						<button className="btn outline" type="button" onClick={enterManually}
-							disabled={!hasShipment || extractingDocument || saveLoading || (isPrepared && preparedSource.kind === "manual")}>
+							disabled={refSearching || extractingDocument || saveLoading || preparedSource?.kind === "manual"}>
 							{isPrepared && preparedSource.kind !== "manual" ? "Replace Charges with Manual Entry" : "Enter Manually"}
 						</button>
 					</section>
 				</div>
 			</section>
 
+			{isPrepared && <section className="panel line-panel">
+				<header className="panel-heading">
+					<div>
+						<h3>Review Charges</h3>
+						<p>Check the debit and credit lines before creating the invoice.</p>
+					</div>
+					<div style={{ display: "flex", gap: "0.5rem" }}>
+						<button type="button" className="btn outline" onClick={addItem}>
+							+ Add line
+						</button>
+					</div>
+				</header>
+
+				<div className="line-table-wrapper" role="region" aria-label="Credit and debit charge lines" tabIndex={0}>
+					<table className="line-table">
+						<thead>
+							<tr>
+								<th>Description</th>
+								<th>Debit</th>
+								<th>Credit</th>
+								<th>Amount</th>
+							</tr>
+						</thead>
+						<tbody>
+							{items.map((it) => (
+								<tr key={it.id}>
+									<td>
+										<input
+											value={it.description}
+											onChange={(e) =>
+												updateItem(it.id, "description", e.target.value)
+											}
+											placeholder="Description"
+										/>
+									</td>
+									<td>
+										<input
+											type="number"
+											value={it.debit}
+											onChange={(e) => updateItem(it.id, "debit", e.target.value)}
+										/>
+									</td>
+									<td>
+										<input
+											type="number"
+											value={it.credit}
+											onChange={(e) => updateItem(it.id, "credit", e.target.value)}
+										/>
+									</td>
+									<td className="right">
+										<div
+											style={{
+												display: "flex",
+												alignItems: "center",
+												gap: "0.5rem",
+												justifyContent: "flex-end",
+											}}
+										>
+											<span>{itemAmount(it).toFixed(2)}</span>
+											<button
+												type="button"
+												className="btn danger ghost"
+												onClick={() => removeItem(it.id)}
+												disabled={items.length === 1}
+												title={
+													items.length === 1
+														? "At least one line item is required"
+														: "Remove this line"
+												}
+											>
+												Remove
+											</button>
+										</div>
+									</td>
+								</tr>
+							))}
+						</tbody>
+					</table>
+				</div>
+
+				<div className="line-footer">
+					<div className="line-metrics" />
+					<div className="subtotal-card">
+						<p>Total</p>
+						<strong>${subtotal.toFixed(2)}</strong>
+					</div>
+				</div>
+			</section>}
+
 			<section className="panel ref-panel">
 				<header className="panel-heading">
 					<div>
-						<h3>3. Create CR/DR Invoice</h3>
+						<h3>4. Create CR/DR Invoice</h3>
 						<p>{isPrepared
 							? "Review the invoice details and charges below before creating it."
-							: preparedSource ? "Restore the prepared shipment and BL or prepare charges for the new selection." : "Import a note, populate a template, or enter charges manually to review the invoice."}</p>
+							: "Import a note, populate a template, or enter charges manually to review the invoice."}</p>
 					</div>
-					{isPrepared && <button className="btn outline" type="button" disabled={saveLoading} onClick={discardPreparedCharges}>Clear Charges</button>}
+					{isPrepared && <button className="btn outline" type="button" disabled={saveLoading || extractingDocument} onClick={discardPreparedCharges}>Clear Charges</button>}
 				</header>
 				{isPrepared && <p role="status">{preparedSource.kind === "manual" ? preparedSource.label : `${preparedSource.kind === "import" ? "Imported note" : "Template"}: ${preparedSource.label}`}</p>}
 				{!isPrepared && <button className="btn ghost" type="button" onClick={internalCancel}>Cancel</button>}
 			</section>
 
-			{isPrepared && <>
-			<section className="panel header-panel">
+			{isPrepared && <section className="panel header-panel">
 				<div className="panel-heading">
 					<div>
 						<h3>Header</h3>
@@ -897,7 +1073,12 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 						<DatePicker
 							className="input-control"
 							selected={invoiceDate}
-							onChange={(d) => setInvoiceDate(d)}
+							onChange={(d) => {
+								setInvoiceDate(d);
+								const payment = getCrdrPaymentTerms(d, { term: netTerm });
+								setDueDate(payment.dueDate);
+								setNetTerm(payment.term);
+							}}
 							dateFormat="yyyy-MM-dd"
 							popperContainer={DatePickerPopperContainer}
 							popperClassName="datepicker-popper-portal"
@@ -919,15 +1100,10 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 									return;
 								}
 								const value = Number(raw);
-								if (Number.isNaN(value)) return;
-								setNetTerm(value);
-								const baseDate =
-									invoiceDate instanceof Date
-										? invoiceDate
-										: new Date(invoiceDate || Date.now());
-								const due = new Date(baseDate);
-								due.setDate(due.getDate() + value);
-								setDueDate(due);
+								if (!Number.isInteger(value) || value < 0) return;
+								const payment = getCrdrPaymentTerms(invoiceDate, { term: value });
+								setNetTerm(payment.term);
+								setDueDate(payment.dueDate);
 							}}
 						/>
 					</div>
@@ -937,7 +1113,12 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 						<DatePicker
 							className="input-control"
 							selected={dueDate}
-							onChange={(d) => setDueDate(d)}
+							onChange={(d) => {
+								const payment = getCrdrPaymentTerms(invoiceDate, { dueDate: d });
+								setDueDate(payment.dueDate);
+								setNetTerm(payment.term);
+							}}
+							minDate={invoiceDate ?? undefined}
 							dateFormat="yyyy-MM-dd"
 							popperContainer={DatePickerPopperContainer}
 							popperClassName="datepicker-popper-portal"
@@ -945,95 +1126,9 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 					</div>
 
 				</div>
-			</section>
 
-			<section className="panel line-panel">
-				<header className="panel-heading">
-					<div>
-						<h3>CRDR Items</h3>
-					</div>
-					<div style={{ display: "flex", gap: "0.5rem" }}>
-						<button type="button" className="btn outline" onClick={addItem}>
-							+ Add line
-						</button>
-					</div>
-				</header>
-
-				<div className="line-table-wrapper">
-					<table className="line-table">
-						<thead>
-							<tr>
-								<th>Description</th>
-								<th>Debit</th>
-								<th>Credit</th>
-								<th>Amount</th>
-							</tr>
-						</thead>
-						<tbody>
-							{items.map((it) => (
-								<tr key={it.id}>
-									<td>
-										<input
-											value={it.description}
-											onChange={(e) =>
-												updateItem(it.id, "description", e.target.value)
-											}
-											placeholder="Description"
-										/>
-									</td>
-									<td>
-										<input
-											type="number"
-											value={it.debit}
-											onChange={(e) => updateItem(it.id, "debit", e.target.value)}
-										/>
-									</td>
-									<td>
-										<input
-											type="number"
-											value={it.credit}
-											onChange={(e) => updateItem(it.id, "credit", e.target.value)}
-										/>
-									</td>
-									<td className="right">
-										<div
-											style={{
-												display: "flex",
-												alignItems: "center",
-												gap: "0.5rem",
-												justifyContent: "flex-end",
-											}}
-										>
-											<span>{itemAmount(it).toFixed(2)}</span>
-											<button
-												type="button"
-												className="btn danger ghost"
-												onClick={() => removeItem(it.id)}
-												disabled={items.length === 1}
-												title={
-													items.length === 1
-														? "At least one line item is required"
-														: "Remove this line"
-												}
-											>
-												Remove
-											</button>
-										</div>
-									</td>
-								</tr>
-							))}
-						</tbody>
-					</table>
-				</div>
-
-				<div className="line-footer">
-					<div className="line-metrics" />
-					<div className="subtotal-card">
-						<p>Total</p>
-						<strong>${subtotal.toFixed(2)}</strong>
-					</div>
-				</div>
-
+				{showReviewBlocker && <p id="crdr-create-blocker" className="inline-error" role="status">{reviewBlocker}</p>}
+				{houseBillNotice && <p id="crdr-house-bill-notice" className="crdr-bill-notice" role="status">{houseBillNotice}</p>}
 				<div className="action-row">
 					<button type="button" className="btn ghost" onClick={internalCancel}>
 						Cancel
@@ -1043,14 +1138,14 @@ function CreateCrdr({ initialData = {}, title = "Create CRDR", onCancel = null }
 						type="button"
 						onClick={handleSave}
 						disabled={isSaveDisabled}
+						aria-describedby={createDescription}
 					>
 						{saveLoading ? "Creating..." : "Create CR/DR Invoice"}
 					</button>
 				</div>
 				{saveError && <div className="inline-error">{saveError}</div>}
 				{saveSuccess && <div className="inline-success">{saveSuccess}</div>}
-			</section>
-			</>}
+			</section>}
 		</div>
 	);
 }

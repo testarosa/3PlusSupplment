@@ -1,0 +1,66 @@
+.document-dropzone {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  gap: .55rem .7rem;
+  padding: .75rem;
+  border: 1px dashed #a7aea0;
+  border-radius: 8px;
+  background: var(--portal-surface);
+  transition: background-color .15s ease, border-color .15s ease;
+}
+
+.document-dropzone[data-dragging="true"] {
+  border-color: var(--portal-accent);
+  outline: 2px solid var(--portal-accent);
+  outline-offset: -2px;
+  background: var(--portal-tint);
+}
+
+.document-dropzone[data-disabled="true"] {
+  background: #f4f3ed;
+  border-color: var(--portal-line);
+}
+
+.document-dropzone-icon {
+  display: grid;
+  place-items: center;
+  width: 2.2rem;
+  aspect-ratio: 1;
+  border-radius: 6px;
+  color: var(--portal-accent);
+  background: var(--portal-tint);
+}
+
+.document-dropzone-copy {
+  display: grid;
+  gap: .15rem;
+  line-height: 1.3;
+  font-size: .875rem;
+}
+
+.document-dropzone-copy p {
+  margin: 0;
+  color: var(--portal-muted);
+  font-size: .8rem;
+}
+
+.document-dropzone-choose {
+  grid-column: 2;
+  justify-self: start;
+}
+
+.document-dropzone-file {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: .35rem .7rem;
+  justify-content: space-between;
+  padding-top: .45rem;
+  border-top: 1px solid var(--portal-line);
+  font-size: .8rem;
+  overflow-wrap: anywhere;
+}

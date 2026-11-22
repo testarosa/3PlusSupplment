@@ -1,0 +1,382 @@
+.portal .workspace-content[data-billing] {
+  padding: clamp(.85rem, 2vw, 1.65rem) clamp(.85rem, 2.3vw, 2rem) 2.25rem;
+}
+
+.portal .workspace-content[data-billing] :is(.create-invoice-page, .edit-crdr-page) {
+  padding: 0;
+  gap: .85rem;
+}
+
+.portal .workspace-content[data-billing] :is(.create-invoice-page, .edit-crdr-page) .panel {
+  padding: clamp(.85rem, 1.6vw, 1.25rem);
+}
+
+.portal .workspace-content[data-billing] :is(.invoice-hero, .edit-crdr-hero, .ap-page-heading) {
+  background: transparent;
+  box-shadow: none;
+  border: 0;
+  border-bottom: 1px solid var(--portal-line);
+  border-radius: 0;
+  padding: .15rem 0 .8rem;
+}
+
+.portal .workspace-content[data-billing] :is(.hero-copy, .edit-crdr-hero, .ap-page-heading) :is(h1, h2, h3) {
+  font: 700 clamp(1.9rem, 3.4vw, 2.65rem)/1.05 var(--portal-display);
+  margin: 0 0 .25rem;
+}
+
+.portal .workspace-content[data-billing] :is(.panel-heading, .panel-header, .table-header) :is(h2, h3) {
+  font-size: 1.45rem;
+  margin: 0;
+}
+
+.portal .workspace-content[data-billing] :is(.header-grid, .form-grid) {
+  gap: .75rem;
+}
+
+.portal .workspace-content[data-billing] :is(.line-table-wrapper, .edit-crdr-page .table-wrapper) {
+  border: 1px solid var(--portal-line);
+  background: var(--portal-surface);
+  max-height: min(60vh, 34rem);
+  overflow: auto;
+}
+
+.portal .workspace-content[data-billing] :is(.line-table, .edit-crdr-page .templates-table) {
+  min-width: 640px;
+}
+
+.portal .workspace-content[data-billing] :is(.line-table, .edit-crdr-page .templates-table) thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.portal .workspace-content[data-billing] .line-footer .subtotal-card {
+  margin-inline-start: auto;
+}
+
+.billing-prepare-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  gap: .8rem;
+  margin-top: .7rem;
+}
+
+.billing-prepare-card {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: .65rem;
+  min-width: 0;
+  padding: .9rem;
+  background: var(--portal-paper);
+  border: 1px solid var(--portal-line);
+  border-radius: 8px;
+}
+
+.billing-prepare-card h4 {
+  margin: 0;
+  font: 700 1.4rem/1.1 var(--portal-display);
+}
+
+.billing-prepare-card p {
+  margin: 0;
+  color: var(--portal-muted);
+}
+
+.billing-prepare-card .field {
+  width: 100%;
+}
+
+.billing-charge-source {
+  margin: .75rem 0 0;
+}
+
+.invoice-review {
+  display: grid;
+  gap: .85rem;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.portal .workspace-content .billing-list-page {
+  display: flex;
+  flex-direction: column;
+  gap: .85rem;
+  overflow: visible;
+}
+
+.portal .workspace-content .billing-list-page > * {
+  animation: none;
+  opacity: 1;
+  transform: none;
+}
+
+.billing-list-heading,
+.billing-results-heading,
+.billing-list-actions,
+.billing-pager {
+  display: flex;
+  align-items: center;
+  gap: .55rem .8rem;
+  flex-wrap: wrap;
+}
+
+.billing-list-heading,
+.billing-results-heading {
+  justify-content: space-between;
+}
+
+.billing-list-heading {
+  padding-bottom: .8rem;
+  border-bottom: 1px solid var(--portal-line);
+}
+
+.billing-list-heading h1 {
+  margin: 0;
+  font: 700 clamp(2rem, 3.75vw, 2.85rem)/1.05 var(--portal-display);
+}
+
+.billing-list-heading p,
+.billing-results-heading p {
+  color: var(--portal-muted);
+  margin: .28rem 0 0;
+  font-size: .875rem;
+}
+
+.portal .workspace-content .billing-list-page .filters-panel {
+  padding: .8rem clamp(.75rem, 1.8vw, 1.2rem);
+}
+
+.portal .workspace-content .billing-list-page .filter-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr) repeat(2, minmax(8.3rem, .8fr)) auto;
+  gap: .6rem;
+  margin: 0;
+  align-items: end;
+}
+
+.portal .workspace-content .billing-list-page .filter-grid input {
+  width: 100%;
+  padding: .4rem .55rem;
+}
+
+.portal .workspace-content .billing-list-page .filter-grid[data-creator-filter] {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, .75fr) repeat(2, minmax(8.3rem, .9fr)) auto;
+}
+
+.billing-user-filter {
+  position: relative;
+  min-width: 0;
+}
+
+.billing-user-input {
+  display: flex;
+  align-items: stretch;
+  gap: .3rem;
+}
+
+.billing-user-input input {
+  flex: 1;
+}
+
+.portal .workspace-content .billing-user-input .btn {
+  padding-inline: .4rem;
+  min-height: 0;
+  font-size: .75rem;
+}
+
+.billing-user-popup {
+  position: absolute;
+  inset: calc(100% + .3rem) auto auto 0;
+  z-index: 5;
+  width: max(100%, 14rem);
+  max-width: min(23rem, 80vw);
+  border: 1px solid var(--portal-line);
+  border-radius: 7px;
+  background: var(--portal-surface);
+  box-shadow: 0 8px 20px #202b2426;
+}
+
+.billing-user-popup ul {
+  max-height: 17rem;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.billing-user-popup :is(li, p) {
+  margin: 0;
+  padding: .45rem .65rem;
+  overflow-wrap: anywhere;
+}
+
+.billing-user-popup li {
+  cursor: pointer;
+}
+
+.billing-user-popup li :is(strong, small) {
+  display: block;
+}
+
+.billing-user-popup li:is(:hover, [aria-selected="true"]) {
+  background: var(--portal-tint);
+}
+
+.portal .workspace-content .billing-list-page .table-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.portal .workspace-content .billing-list-page .billing-results-heading {
+  padding: .75rem 1rem;
+  border-bottom: 1px solid var(--portal-line);
+  margin: 0;
+}
+
+.billing-pager {
+  justify-content: flex-end;
+  font-size: .825rem;
+  gap: .3rem;
+}
+
+.billing-pager span {
+  padding-inline: .25rem;
+  white-space: nowrap;
+}
+
+.portal .workspace-content .billing-list-page .table-wrapper {
+  min-height: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+}
+
+.portal .workspace-content .billing-list-page .billing-records {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+  border-collapse: collapse;
+}
+
+.portal .workspace-content .billing-records :is(th, td) {
+  padding: .55rem .7rem;
+}
+
+.portal .workspace-content .billing-records td:first-child,
+.portal .workspace-content .billing-records td[data-label="Total"] {
+  font-weight: 700;
+}
+
+.portal .workspace-content .billing-records td {
+  overflow-wrap: anywhere;
+}
+
+.billing-created-by {
+  display: block;
+  color: var(--portal-muted);
+  font-weight: 400;
+}
+
+.portal .workspace-content .billing-records td:last-child {
+  white-space: nowrap;
+}
+
+.portal .workspace-content .billing-records .billing-numeric {
+  text-align: right;
+}
+
+.portal .workspace-content .billing-records .billing-negative {
+  color: #a62d23;
+}
+
+.portal .workspace-content .billing-list-page .btn {
+  width: auto;
+}
+
+.portal .workspace-content .billing-records .due-chip {
+  padding: .12rem .35rem;
+  background: #edece4;
+  color: var(--portal-ink);
+  border-radius: 4px;
+}
+
+.portal .workspace-content .billing-list-page :is(.empty-row, .error-row) {
+  margin: .8rem;
+}
+
+@media (max-width: 1050px) {
+  .portal .workspace-content .billing-list-page .filter-grid,
+  .portal .workspace-content .billing-list-page .filter-grid[data-creator-filter] {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 850px) {
+  .portal .workspace-content .billing-records,
+  .portal .workspace-content .billing-records tbody {
+    display: block;
+  }
+
+  .portal .workspace-content .billing-records tbody {
+    display: grid;
+    gap: .55rem;
+    padding: .65rem;
+    background: var(--portal-paper);
+  }
+
+  .portal .workspace-content .billing-records thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    overflow: hidden;
+  }
+
+  .portal .workspace-content .billing-records tbody tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    padding: .6rem;
+    border: 1px solid var(--portal-line);
+    border-radius: 7px;
+  }
+
+  .portal .workspace-content .billing-records tbody td {
+    width: auto;
+    padding: .35rem;
+    text-align: left;
+    border: 0;
+  }
+
+  .portal .workspace-content .billing-records tbody td[data-label]::before {
+    content: attr(data-label);
+    display: block;
+    margin-bottom: .1rem;
+    font-size: .72rem;
+    font-weight: 700;
+    color: var(--portal-muted);
+  }
+
+  .portal .workspace-content .billing-records tbody td:last-child {
+    grid-column: 1 / -1;
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid var(--portal-line);
+    margin-top: .25rem;
+    padding-top: .6rem;
+  }
+
+  .portal .workspace-content .billing-records tbody td:is(.amount-col, .ap-result-total, .billing-numeric) {
+    text-align: left;
+  }
+}
+
+@media (max-width: 440px) {
+  .billing-pager button:is(:first-child, :last-child) { display: none; }
+  .billing-list-actions { justify-content: space-between; width: 100%; }
+  .billing-list-heading p { line-height: 1.4; }
+  .portal .workspace-content .billing-list-page .filter-grid > button { grid-column: 1 / -1; }
+}

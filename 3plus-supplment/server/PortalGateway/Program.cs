@@ -14,6 +14,11 @@ builder.Configuration.AddJsonFile(Path.Combine(serviceDirectory, "3PlusPortalGat
 var portalOrigin = new Uri(builder.Configuration["Portal:Origin"] ?? "https://e3pl.com");
 var backend = new Uri(builder.Configuration["Portal:Backend"] ?? "http://192.168.20.8/");
 var upstreamHost = builder.Configuration["Portal:BackendHost"] ?? "api.e3pl.com";
+var apBackend = new Uri(builder.Configuration["Portal:AccountsPayableBackend"] ?? "http://127.0.0.1:5164/");
+var apWriteKey = builder.Configuration["Portal:AccountsPayableWriteKey"];
+if (apBackend.Scheme != "http" || !IPAddress.TryParse(apBackend.Host, out var apAddress) || !IPAddress.IsLoopback(apAddress) ||
+    apBackend.AbsolutePath != "/" || apBackend.Query.Length > 0 || apBackend.Fragment.Length > 0 || apBackend.UserInfo.Length > 0)
+    throw new InvalidOperationException("Use a loopback HTTP origin for the accounts payable API.");
 if (portalOrigin.Scheme != "https" || !IPAddress.TryParse(backend.Host, out var localAddress) ||
     !(IPAddress.IsLoopback(localAddress) || NetworkInterface.GetAllNetworkInterfaces()
         .SelectMany(network => network.GetIPProperties().UnicastAddresses)
@@ -130,7 +135,7 @@ var routes = new (string Method, string Path)[]
     ("GET", "/Invoice/SearchInvoices"), ("POST", "/Invoice/SaveInvoice"),
     ("DELETE", "/Invoice/DeleteInvoice/{id}"), ("DELETE", "/Invoice/DeleteInvoice"), ("POST", "/Invoice/DeleteInvoice"),
     ("GET", "/Crdr/GetCrdrs"), ("GET", "/Crdr/GetCrdrById/{id}"),
-    ("GET", "/Crdr/GetCRDRByRefNumber"), ("POST", "/Crdr/SaveCrdr"),
+    ("GET", "/Crdr/GetCRDRByRefNumber"), ("GET", "/Crdr/GetAirImportShipment"), ("POST", "/Crdr/SaveCrdr"),
     ("GET", "/CrdrTemplate/GetTemplate"), ("GET", "/CrdrTemplate/GetByAgentName"),
     ("GET", "/CrdrTemplate/GetByAgentId"), ("POST", "/CrdrTemplate/Insert"),
     ("POST", "/CrdrTemplate/Update"), ("DELETE", "/CrdrTemplate/Delete/{id}"),
@@ -139,7 +144,35 @@ var routes = new (string Method, string Path)[]
     ("PUT", "/api/InvoiceTemplates/{id}"), ("DELETE", "/api/InvoiceTemplates/{id}")
 };
 foreach (var (method, path) in routes)
-    app.MapMethods(path, [method], ProxyBilling).RequireAuthorization();
+    app.MapMethods(path, [method], (HttpContext context, IHttpClientFactory clients) => ProxyBilling(context, clients))
+        .RequireAuthorization();
+
+foreach (var path in new[] { "/api/accounts-payable/invoices", "/api/accounts-payable/invoices/{id:int}",
+    "/api/accounts-payable/invoices/{id:int}/lines", "/api/accounts-payable/invoices/{id:int}/edit",
+    "/api/accounts-payable/vendors", "/api/accounts-payable/billing-codes",
+    "/api/air-import/shipment-by-reference", "/api/credit-debit-memos/memos", "/api/billing-users",
+    "/api/accounts-receivable/invoices" })
+    app.MapGet(path, (HttpContext context, IHttpClientFactory clients) => ProxyBilling(context, clients, apBackend))
+        .RequireAuthorization();
+
+app.MapPut("/api/accounts-payable/invoices/{id:int}/edit", WriteAccountsPayable).RequireAuthorization();
+app.MapPost("/api/accounts-payable/invoices/from-shipment", WriteAccountsPayable).RequireAuthorization();
+
+async Task WriteAccountsPayable(HttpContext context, IHttpClientFactory clients)
+{
+    var employee = context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (string.IsNullOrWhiteSpace(apWriteKey))
+    {
+        await Results.Json(new { title = "AP invoice saving is not configured." }, statusCode: 503).ExecuteAsync(context);
+        return;
+    }
+    if (string.IsNullOrWhiteSpace(employee) || employee.Length > 10 || employee.Any(value => value < 33 || value > 126))
+    {
+        await Results.Json(new { title = "Your employee ID cannot be recorded in PLUS." }, statusCode: 400).ExecuteAsync(context);
+        return;
+    }
+    await ProxyBilling(context, clients, apBackend, employee);
+}
 
 CrdrExtraction.Map(app);
 
@@ -153,7 +186,7 @@ HttpRequestMessage CreateRequest(HttpMethod method, string pathAndQuery)
     return request;
 }
 
-async Task ProxyBilling(HttpContext context, IHttpClientFactory clients)
+async Task ProxyBilling(HttpContext context, IHttpClientFactory clients, Uri? alternateBackend = null, string? apEditor = null)
 {
     var incoming = context.Request;
     if (incoming.RouteValues.Values.OfType<string>().Any(value => value is "." or ".." || value.IndexOfAny(['/', '\\', '%']) >= 0))
@@ -161,7 +194,15 @@ async Task ProxyBilling(HttpContext context, IHttpClientFactory clients)
         context.Response.StatusCode = StatusCodes.Status400BadRequest;
         return;
     }
-    using var request = CreateRequest(new HttpMethod(incoming.Method), incoming.Path.ToUriComponent() + incoming.QueryString.ToUriComponent());
+    var path = incoming.Path.ToUriComponent() + incoming.QueryString.ToUriComponent();
+    using var request = alternateBackend is null
+        ? CreateRequest(new HttpMethod(incoming.Method), path)
+        : new HttpRequestMessage(new HttpMethod(incoming.Method), new Uri(alternateBackend, path));
+    if (apEditor is not null)
+    {
+        request.Headers.Add("X-AP-Write-Key", apWriteKey!);
+        request.Headers.Add("X-AP-Operator", apEditor);
+    }
     if (HttpMethods.IsPost(incoming.Method) || HttpMethods.IsPut(incoming.Method))
     {
         if (!incoming.HasJsonContentType())

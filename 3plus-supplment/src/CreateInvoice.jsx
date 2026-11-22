@@ -7,6 +7,7 @@ import React, {
 } from "react";
 import { createPortal } from "react-dom";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import "./CreateInvoice.css";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
@@ -14,7 +15,7 @@ import { fetchInvoiceTemplatesByCustomer } from "./api/invoiceTemplates";
 import { getInvoiceByRef, saveInvoice } from "./api/invoices";
 import { getCustomersByName } from "./api/customers";
 import { getBillingCodes } from "./api/billingCodes";
-import { selectAuth } from "./store/slices/authSlice";
+import { selectAuth, selectBillingUserId } from "./store/slices/authSlice";
 
 const DatePickerPopperContainer = ({ children }) => {
   if (typeof document === "undefined") return children;
@@ -172,16 +173,7 @@ const metaToCustomerOption = (meta) => {
   });
 };
 
-const formatDisplayDate = (value) => {
-  if (!value) return "—";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
+const emptyLine = (id = 1) => ({ id, billingCode: "", description: "", rate: 0, qty: 1 });
 
 const extractInvoiceLineItemsFromLookup = (payload) => {
   if (!payload || typeof payload !== "object") return [];
@@ -267,7 +259,9 @@ function CreateInvoice({
   title = "Create Invoice",
   onCancel = null,
 }) {
+  const navigate = useNavigate();
   const auth = useSelector(selectAuth);
+  const loginUserId = useSelector(selectBillingUserId);
   const currentUser = auth?.user ?? null;
   const userBranch =
     currentUser?.branch ??
@@ -289,14 +283,8 @@ function CreateInvoice({
     currentUser?.id ??
     currentUser?.Id ??
     "";
-  const userNameForTemplates =
-    currentUser?.userId ??
-    currentUser?.userName ??
-    currentUser?.username ??
-    currentUser?.name ??
-    "POM";
-  // BL list is populated from templates or demo fallback (no Ref input in this UI)
-  const [acBL, setAcBL] = useState({ list: [], index: -1, visible: false });
+  const userNameForTemplates = loginUserId || String(userIdForPayload);
+  const [blList, setBlList] = useState([]);
   const [selectedBL, setSelectedBL] = useState("");
   // editable header fields
   const [billTo, setBillTo] = useState(initialData?.billTo ?? "");
@@ -317,7 +305,7 @@ function CreateInvoice({
     try {
       const d = new Date(v);
       return Number.isNaN(d.getTime()) ? null : d;
-    } catch (e) {
+    } catch {
       return null;
     }
   };
@@ -348,45 +336,13 @@ function CreateInvoice({
     initialData?.freightTypeCode ?? initialData?.freightType ?? "",
   );
 
-  // After a ref lookup, optionally auto-populate invoice items from templates once bill-to is known.
-  const [autoPopulateAfterRef, setAutoPopulateAfterRef] = useState(false);
-  const [templateOptions, setTemplateOptions] = useState([]);
-  const [selectedTemplateId, setSelectedTemplateId] = useState("");
-  const [templateLoading, setTemplateLoading] = useState(false);
-
-  // Populate BL list on mount: prefer sessionStorage templates -> fallback generated demo BLs
-  React.useEffect(() => {
-    try {
-      const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null",
-      );
-      if (Array.isArray(templates) && templates.length) {
-        const bls = Array.from(
-          new Set(
-            templates
-              .flatMap((t) => (Array.isArray(t.blNumbers) ? t.blNumbers : []))
-              .filter(Boolean),
-          ),
-        );
-        if (bls.length) {
-          setAcBL({ list: bls.slice(0, 50), index: 0, visible: false });
-          setBlMeta({});
-          return;
-        }
-      }
-    } catch (err) {
-      // ignore
-    }
-    // fallback demo BLs
-    const generated = [];
-    setAcBL((s) => ({
-      ...s,
-      list: generated,
-      index: generated.length ? 0 : -1,
-      visible: false,
-    }));
-    setBlMeta({});
-  }, []);
+  const [lookupCharges, setLookupCharges] = useState(null);
+  const [preparedSource, setPreparedSource] = useState(null);
+  const [templateResult, setTemplateResult] = useState(null);
+  const [templateChoice, setTemplateChoice] = useState(null);
+  const [saveLoading, setSaveLoading] = useState(false);
+  const [saveFeedback, setSaveFeedback] = useState(null);
+  const reviewHeading = useRef(null);
 
   useEffect(() => {
     return () => {
@@ -413,7 +369,7 @@ function CreateInvoice({
         setCustomerOptions(dedupeCustomerOptions(customers));
         return;
       }
-    } catch (e) {
+    } catch {
       /* ignore */
     }
     setCustomerOptions(dedupeCustomerOptions([]));
@@ -422,6 +378,7 @@ function CreateInvoice({
   // Ref handlers: autocomplete + search
   const handleRefChange = (val) => {
     setRefSearchTerm(val);
+    setRefLookupError(null);
   };
 
   const parseCombinedRefInput = (raw) => {
@@ -447,132 +404,45 @@ function CreateInvoice({
     };
   };
 
-  const formatBillToFromMeta = (meta) => {
-    const normalized = metaToCustomerOption(meta);
-    return normalized ? optionLabel(normalized) : "";
-  };
-
-  const applyTemplateBLFallback = (refValue) => {
-    let handled = false;
-    try {
-      const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null",
-      );
-      if (Array.isArray(templates)) {
-        const t = templates.find(
-          (it) =>
-            (it.ref || "").toLowerCase() === (refValue || "").toLowerCase(),
-        );
-        if (t && Array.isArray(t.blNumbers) && t.blNumbers.length) {
-          const list = t.blNumbers.slice(0, 50);
-          setAcBL({ list, index: list.length ? 0 : -1, visible: false });
-          setBlMeta({});
-          handled = true;
-        }
-      }
-    } catch (err) {
-      // ignore fallback errors
-    }
-
-    if (!handled) {
-      const refKey = (refValue || "REF").replace(/[^a-zA-Z0-9-]/g, "") || "REF";
-      const generated = Array.from(
-        { length: 5 },
-        (_, i) => `${refKey}-BL-${(i + 1).toString().padStart(3, "0")}`,
-      );
-      setAcBL({
-        list: generated,
-        index: generated.length ? 0 : -1,
-        visible: false,
-      });
-      setBlMeta({});
-    }
-
-    setSelectedBL("");
-    return handled;
-  };
-
-  const loadTemplatesForBillTo = async (
-    billToId,
-    freightType = "OI",
-    { selectDefault = false, applyDefault = false } = {},
-  ) => {
-    const normalizedBillToId =
-      coerceNumber(billToId) ?? String(billToId || "").trim();
-    if (!normalizedBillToId && normalizedBillToId !== 0) {
-      setTemplateOptions([]);
-      setSelectedTemplateId("");
-      return [];
-    }
-
-    setTemplateLoading(true);
-    try {
-      const templates = await fetchInvoiceTemplatesByCustomer(
-        normalizedBillToId,
-        userNameForTemplates,
-        freightType,
-      );
-      const nextTemplates = Array.isArray(templates) ? templates : [];
-      setTemplateOptions(nextTemplates);
-      const defaultTemplate = selectDefault
-        ? findDefaultTemplate(nextTemplates)
-        : null;
-      setSelectedTemplateId(
-        defaultTemplate?.id != null ? String(defaultTemplate.id) : "",
-      );
-      if (applyDefault && defaultTemplate) {
-        applyInvoiceTemplate(defaultTemplate);
-      }
-      return nextTemplates;
-    } catch (err) {
-      console.warn("[CreateInvoice] template lookup failed", err);
-      setTemplateOptions([]);
-      setSelectedTemplateId("");
-      setRefLookupError(
-        err?.message || "Unable to load invoice templates for this Bill To.",
-      );
-      return [];
-    } finally {
-      setTemplateLoading(false);
-    }
-  };
-
   const doRefSearch = async (e) => {
-    if (e && e.preventDefault) e.preventDefault();
+    e?.preventDefault();
+    if (refSearching || saveLoading) return;
     const rawQuery = (refSearchTerm || "").trim();
     const { refQuery: query, preferredBl: preferredBlFromInput } =
       parseCombinedRefInput(rawQuery);
     if (!query) {
-      setSelectedRef("");
-      setSelectedBL("");
-      setAcBL((s) => ({ ...s, list: [], index: -1, visible: false }));
-      setBlMeta({});
       setRefLookupError("Reference number is required");
       return;
     }
 
-    setSelectedRef(query);
+    if (preparedSource && !saveFeedback?.success && !window.confirm("Replace the prepared invoice with a new shipment lookup?")) return;
+    setSelectedRef("");
+    setSelectedBL("");
+    setBlList([]);
+    setBlMeta({});
+    setLookupCharges(null);
+    setPreparedSource(null);
+    setTemplateChoice(null);
+    setSaveFeedback(null);
     setRefLookupError(null);
+    applyShipmentHeader(null);
     const today = new Date();
     setInvoicePostDate(today);
     setInvoiceDate(today);
     setNetTerm("");
     setDueDate(null);
     setInvoiceNumber("");
-    setItems([]);
-    setTemplateOptions([]);
-    setSelectedTemplateId("");
+    setItems([emptyLine()]);
     setRefSearching(true);
 
     try {
       const response = await getInvoiceByRef(query);
-      console.log("Lookup response", { response });
       let payload = response;
       if (typeof payload === "string") {
         try {
           payload = JSON.parse(payload);
-        } catch (err) {
-          // leave payload as-is if parsing fails
+        } catch {
+          // A non-JSON response cannot contain a verified shipment.
         }
       }
 
@@ -582,29 +452,12 @@ function CreateInvoice({
       const lookupFreightType = getInvoiceFreightType(payload);
       setBillingFreightType(lookupFreightType);
 
-      // Populate invoice items from the lookup payload when present.
       const extractedLines = extractInvoiceLineItemsFromLookup(payload);
-      if (extractedLines.length) {
-        setItems(
-          extractedLines.map((line, idx) => ({
-            id: idx + 1,
-            billingCode: line.billingCode || "",
-            description: line.description || "",
-            rate: typeof line.rate !== "undefined" ? line.rate : 0,
-            qty: typeof line.qty !== "undefined" ? line.qty : 1,
-          })),
-        );
-        setAutoPopulateAfterRef(false);
-      } else {
-        // Keep UI usable while we possibly auto-populate from templates.
-        setItems([
-          { id: 1, billingCode: "", description: "", rate: 0, qty: 1 },
-        ]);
-      }
 
       const mbl = (
         payload?.tOIMMainDto?.fMblno ||
         payload?.tAIMMain?.fMawbNo ||
+        payload?.tAIMMainDto?.fMawbNo ||
         ""
       )
         .toString()
@@ -615,8 +468,6 @@ function CreateInvoice({
         : Array.isArray(payload?.tAIHMainDtos)
           ? payload.tAIHMainDtos
           : [];
-
-      console.log("Extracted BL info from lookup", { mbl, hblRows });
 
       const extractNames = (row = {}) => {
         const toTrimmedString = (value) =>
@@ -705,6 +556,7 @@ function CreateInvoice({
           payload?.tOIMMainDto?.id ??
           payload?.tOIMMainDto?.Id ??
           payload?.tAIMMainDto?.fId ??
+          payload?.tAIMMain?.fId ??
           null;
         metaMap[mbl] = {
           kind: "MBL",
@@ -739,131 +591,91 @@ function CreateInvoice({
             ? preferredBlFromInput
             : defaultPreferred;
 
-        setAcBL({
-          list: combinedList,
-          index: combinedList.length ? 0 : -1,
-          visible: false,
-        });
-        setBlMeta(metaMap);
-
-        // Auto-select the first HBL (preferred) to drive header population.
-        setSelectedBL(preferredBl);
-
-        // Populate header immediately (don't rely only on async blMeta state).
-        const metaOverride = metaMap?.[preferredBl];
-        if (metaOverride) {
-          const normalizedMeta = metaToCustomerOption(metaOverride);
-          const combined = normalizedMeta
-            ? optionLabel(normalizedMeta)
-            : formatBillToFromMeta(metaOverride);
-          if (combined) setBillTo(combined);
-
-          const normalizedId = normalizedMeta
-            ? (coerceNumber(normalizedMeta.id) ??
-              coerceNumber(normalizedMeta.value))
-            : null;
-          const derivedCustomerId =
-            typeof normalizedId === "number"
-              ? normalizedId
-              : coerceNumber(metaOverride.customerId);
-          setSelectedCustomerId(
-            typeof derivedCustomerId === "number" ? derivedCustomerId : null,
-          );
-          if (typeof derivedCustomerId === "number") {
-            await loadTemplatesForBillTo(derivedCustomerId, lookupFreightType, {
-              applyDefault: !extractedLines.length,
-              selectDefault: true,
-            });
-          } else {
-            setTemplateOptions([]);
-            setSelectedTemplateId("");
-          }
+        const verified = [...new Set(combinedList)].filter((bl) =>
+          metaMap[bl]?.recordId > 0 && metaMap[bl]?.tbName
+        );
+        if (!verified.length) {
+          setRefLookupError("No verifiable BL records were found for this reference.");
+          return;
         }
-
+        const selected = verified.includes(preferredBl) ? preferredBl : verified[0];
+        setBlList(verified);
+        setBlMeta(metaMap);
+        setSelectedRef(query);
+        setSelectedBL(selected);
+        applyShipmentHeader(metaMap[selected]);
+        if (extractedLines.length && selected === defaultPreferred) {
+          setLookupCharges({ bl: selected, lines: extractedLines });
+        }
         return;
       }
 
       setRefLookupError("No BL information returned for this reference.");
-      applyTemplateBLFallback(query);
     } catch (err) {
       console.warn("[CreateInvoice] invoice lookup failed", err);
       setRefLookupError(err?.message || "Unable to load invoice details");
-      setBlMeta({});
-      applyTemplateBLFallback(query);
     } finally {
       setRefSearching(false);
     }
   };
 
-  // initialize header fields when selectedRef or selectedBL change
-  const refreshHeader = (refVal, blVal) => {
-    if (!refVal && !blVal) return;
-    // billTo from templates if available
-    let bt = "";
-    try {
-      const templates = JSON.parse(
-        sessionStorage.getItem("templates") || "null",
-      );
-      if (Array.isArray(templates)) {
-        let t = null;
-        if (refVal)
-          t = templates.find(
-            (it) =>
-              (it.ref || "").toLowerCase() === (refVal || "").toLowerCase(),
-          );
-        if (!t && blVal)
-          t = templates.find(
-            (it) => Array.isArray(it.blNumbers) && it.blNumbers.includes(blVal),
-          );
-        if (!t && templates.length) t = templates[0];
-        if (t && t.customer) bt = t.customer;
-      }
-    } catch (err) {
-      /* ignore */
+  const applyShipmentHeader = (meta) => {
+    const customer = metaToCustomerOption(meta);
+    setBillTo(customer ? optionLabel(customer) : "");
+    setSelectedCustomerId(coerceNumber(customer?.id) ?? coerceNumber(meta?.customerId));
+    setAcBill({ list: [], index: -1, visible: false, query: "" });
+    if (customer) {
+      setCustomerOptions((previous) => dedupeCustomerOptions([...previous, customer]));
     }
-
-    const metaOverride = blMeta?.[blVal];
-    let derivedCustomerId = null;
-    if (metaOverride) {
-      const normalizedMeta = metaToCustomerOption(metaOverride);
-      const combined = normalizedMeta
-        ? optionLabel(normalizedMeta)
-        : formatBillToFromMeta(metaOverride);
-      if (combined) bt = combined;
-
-      const normalizedId = normalizedMeta
-        ? (coerceNumber(normalizedMeta.id) ??
-          coerceNumber(normalizedMeta.value))
-        : null;
-      derivedCustomerId =
-        typeof normalizedId === "number"
-          ? normalizedId
-          : coerceNumber(metaOverride.customerId);
-
-      if (normalizedMeta) {
-        setCustomerOptions((prev) => {
-          const label = (optionLabel(normalizedMeta) || "").toLowerCase();
-          const value = (normalizedMeta.value || "").toString().toLowerCase();
-          const exists = prev.some(
-            (opt) =>
-              (optionLabel(opt) || "").toLowerCase() === label &&
-              (opt.value || "").toString().toLowerCase() === value,
-          );
-          if (exists) return prev;
-          return [...prev, normalizedMeta];
-        });
-      }
-    }
-
-    setBillTo(bt);
-    setSelectedCustomerId(
-      typeof derivedCustomerId === "number" ? derivedCustomerId : null,
-    );
   };
 
-  React.useEffect(() => {
-    refreshHeader(selectedRef, selectedBL);
-  }, [selectedRef, selectedBL, blMeta]);
+  const activeReference = parseCombinedRefInput(refSearchTerm).refQuery;
+  const selectedMeta = blMeta[selectedBL];
+  const hasShipment = Boolean(!refSearching && selectedRef && selectedRef === activeReference &&
+    selectedMeta?.recordId > 0 && selectedMeta.tbName && blList.includes(selectedBL));
+  const isPrepared = Boolean(hasShipment && preparedSource?.reference === selectedRef && preparedSource.bl === selectedBL);
+  const templateCustomerId = coerceNumber(selectedCustomerId);
+  const templateFreightType = billingFreightType || "OI";
+  const templateKey = hasShipment && templateCustomerId > 0
+    ? JSON.stringify([selectedRef, selectedBL, templateCustomerId, templateFreightType, userNameForTemplates])
+    : "";
+  const currentTemplates = templateResult?.key === templateKey ? templateResult : null;
+  const templateOptions = currentTemplates?.options ?? [];
+  const templateLoading = Boolean(templateKey && !currentTemplates);
+  const selectedTemplateId = templateChoice?.key === templateKey
+    ? templateChoice.id : String(findDefaultTemplate(templateOptions)?.id ?? "");
+  const selectedTemplate = templateOptions.find((template) => String(template.id) === selectedTemplateId);
+
+  useEffect(() => {
+    if (!templateKey) return;
+    let active = true;
+    fetchInvoiceTemplatesByCustomer(templateCustomerId, userNameForTemplates, templateFreightType)
+      .then((templates) => {
+        if (active) setTemplateResult({
+          key: templateKey, options: templates.filter((template) => template.items?.length),
+        });
+      })
+      .catch((error) => {
+        if (active) setTemplateResult({
+          key: templateKey, error: error?.message || "Unable to load invoice templates.",
+        });
+      });
+    return () => { active = false; };
+  }, [templateKey, templateCustomerId, userNameForTemplates, templateFreightType]);
+
+  const handleBlChange = (value) => {
+    if (value === selectedBL || saveLoading) return;
+    if (preparedSource && !saveFeedback?.success && !window.confirm("Clear prepared charges and switch the BL?")) return;
+    setSelectedBL(value);
+    setPreparedSource(null);
+    setTemplateChoice(null);
+    setSaveFeedback(null);
+    setInvoiceNumber("");
+    setNetTerm("");
+    setDueDate(null);
+    setItems([emptyLine()]);
+    applyShipmentHeader(blMeta[value]);
+  };
 
   const handleBillChange = (val) => {
     setBillTo(val);
@@ -947,98 +759,48 @@ function CreateInvoice({
     setAcBill({ list: [], index: -1, visible: false, query: "" });
   };
 
-  const handleAutoPopulate = async () => {
-    const normalizedBillToId = coerceNumber(selectedCustomerId);
-    if (typeof normalizedBillToId !== "number") {
-      setRefLookupError(
-        "Bill To customer id is required before auto-populating invoice details.",
-      );
-      return;
-    }
-
-    try {
-      const templates = await loadTemplatesForBillTo(
-        normalizedBillToId,
-        billingFreightType || "OI",
-      );
-      const template =
-        Array.isArray(templates) && templates.length ? templates[0] : null;
-      if (!template || !template.items?.length) {
-        setRefLookupError("No invoice template found for this Bill To.");
-        return;
-      }
-
-      const templateTerm = Number(template.netTerm);
-      if (!Number.isNaN(templateTerm) && templateTerm >= 0) {
-        setNetTerm(templateTerm);
-        const baseDate =
-          invoiceDate instanceof Date
-            ? invoiceDate
-            : new Date(invoiceDate || Date.now());
-        const due = new Date(baseDate);
-        due.setDate(due.getDate() + templateTerm);
-        setDueDate(due);
-      }
-
-      const mapped = template.items.map((it, idx) => ({
-        id: idx + 1,
-        billingCode: it.billingCode || it.code || "",
-        description: it.description || it.desc || "",
-        rate: typeof it.rate !== "undefined" ? it.rate : it.amount || 0,
-        qty: typeof it.qty !== "undefined" ? it.qty : 1,
-      }));
-      setItems(mapped);
-      setRefLookupError(null);
-    } catch (err) {
-      console.warn("[CreateInvoice] auto populate lookup failed", err);
-      setRefLookupError(
-        err?.message || "Unable to load invoice template for this Bill To.",
-      );
-    }
+  const prepareCharges = (kind, label, lines) => {
+    if (!hasShipment || saveLoading) return;
+    setPreparedSource({ kind, label, reference: selectedRef, bl: selectedBL });
+    setSaveFeedback(null);
+    setItems(lines);
+    reviewHeading.current?.focus();
   };
 
-  const applyInvoiceTemplate = (template) => {
-    if (!template) return;
-
-    setBillTo(template.customerName || template.billToName || "");
-    setSelectedCustomerId(template.customerId ?? template.billTo ?? null);
-    if (template.freightTypeCode || template.freightType) {
-      setBillingFreightType(template.freightTypeCode ?? template.freightType);
-    }
-
-    const templateTerm = Number(template.netTerm ?? template.term);
-    if (!Number.isNaN(templateTerm) && templateTerm >= 0) {
-      setNetTerm(templateTerm);
-      const baseDate =
-        invoiceDate instanceof Date
-          ? invoiceDate
-          : new Date(invoiceDate || Date.now());
-      const due = new Date(baseDate);
-      due.setDate(due.getDate() + templateTerm);
+  const populateTemplate = () => {
+    if (!selectedTemplate?.items?.length || !hasShipment || saveLoading) return;
+    const term = selectedTemplate.netTerm ?? selectedTemplate.term;
+    if (term != null && String(term).trim() && Number.isSafeInteger(Number(term)) && Number(term) >= 0) {
+      setNetTerm(Number(term));
+      const due = new Date(invoiceDate || Date.now());
+      due.setDate(due.getDate() + Number(term));
       setDueDate(due);
     }
-
-    if (Array.isArray(template.items) && template.items.length) {
-      setItems(
-        template.items.map((it, idx) => ({
-          id: idx + 1,
-          billingCode: it.billingCode || it.code || "",
-          description: it.description || it.desc || "",
-          rate: typeof it.rate !== "undefined" ? it.rate : it.amount || 0,
-          qty: typeof it.qty !== "undefined" ? it.qty : 1,
-        })),
-      );
-    }
-
-    setRefLookupError(null);
+    prepareCharges("template", selectedTemplate.name || "Invoice template", selectedTemplate.items.map((item, index) => ({
+      id: index + 1,
+      billingCode: item.billingCode || item.code || "",
+      description: item.description || item.desc || "",
+      rate: item.rate ?? item.amount ?? 0,
+      qty: item.qty ?? 1,
+    })));
   };
 
-  const handleTemplateChange = (templateId) => {
-    setSelectedTemplateId(templateId);
-    const selected = templateOptions.find(
-      (template) => String(template.id) === String(templateId),
-    );
-    applyInvoiceTemplate(selected);
+  const clearCharges = () => {
+    setPreparedSource(null);
+    setSaveFeedback(null);
+    setItems([emptyLine()]);
+  };
+
+  const fillHeaderDefaults = () => {
+    const date = invoiceDate ?? new Date();
+    if (!invoiceDate) setInvoiceDate(date);
+    if (!invoicePostDate) setInvoicePostDate(new Date());
+    if (!coerceNumber(selectedCustomerId) && selectedMeta?.customerId) applyShipmentHeader(selectedMeta);
+    if (!dueDate && netTerm !== "") {
+      const due = new Date(date);
+      due.setDate(due.getDate() + Number(netTerm));
+      setDueDate(due);
+    }
   };
 
   // Line items (reused from CreateInvoiceTemplate)
@@ -1059,30 +821,6 @@ function CreateInvoice({
     );
   };
 
-  useEffect(() => {
-    if (!autoPopulateAfterRef) return;
-    if (refSearching) return;
-    if (typeof coerceNumber(selectedCustomerId) !== "number") return;
-
-    const hasMeaningfulLines = (items || []).some((it) => {
-      if (!it) return false;
-      const code = (it.billingCode || "").toString().trim();
-      const desc = (it.description || "").toString().trim();
-      const rate = Number(it.rate) || 0;
-      // qty defaults to 1 in the blank line; don't use it to decide if lines are populated.
-      return Boolean(code || desc || rate > 0);
-    });
-
-    // If something already populated the lines, don't overwrite.
-    if (hasMeaningfulLines) {
-      setAutoPopulateAfterRef(false);
-      return;
-    }
-
-    setAutoPopulateAfterRef(false);
-    // Populate terms + items from templates.
-    handleAutoPopulate();
-  }, [autoPopulateAfterRef, selectedCustomerId, items, refSearching]);
 
   const refs = useRef({});
   const billingDebounce = useRef({});
@@ -1222,8 +960,8 @@ function CreateInvoice({
         if (!alive) return;
         const normalized = normalizeCodes(results);
         setBillingCodeOptions(normalized);
-      } catch (err) {
-        // ignore preload failures; live search will still work.
+      } catch {
+        // Live search still works if the preload fails.
       } finally {
         if (alive) setBillingCodeBootstrapped(true);
       }
@@ -1392,91 +1130,17 @@ function CreateInvoice({
     [items],
   );
 
-  const lineStats = useMemo(() => {
-    const ready = items.filter((it) => it.billingCode && it.description).length;
-    const zeroTotals = items.filter((it) => itemAmount(it) <= 0).length;
-    return {
-      total: items.length,
-      ready,
-      pending: Math.max(items.length - ready, 0),
-      zeroTotals,
-    };
-  }, [items]);
-
-  const avgLineAmount = useMemo(
-    () => (lineStats.total ? subtotal / lineStats.total : 0),
-    [lineStats.total, subtotal],
-  );
-
-  const readiness = useMemo(
-    () => ({
-      reference: Boolean((selectedRef || refSearchTerm || "").trim()),
-      customer: Boolean((billTo || "").trim() && selectedCustomerId),
-      schedule: Boolean(invoicePostDate && invoiceDate && dueDate),
-      lines: lineStats.total > 0 && lineStats.ready === lineStats.total,
-    }),
-    [
-      selectedRef,
-      refSearchTerm,
-      billTo,
-      selectedCustomerId,
-      invoicePostDate,
-      invoiceDate,
-      dueDate,
-      lineStats.total,
-      lineStats.ready,
-    ],
-  );
-
-  const progressSteps = useMemo(
-    () => [
-      {
-        label: "Reference search",
-        complete: readiness.reference,
-        detail: readiness.reference
-          ? selectedRef || refSearchTerm
-          : "Search reference to load BLs",
-      },
-      {
-        label: "Bill-to selection",
-        complete: readiness.customer,
-        detail: readiness.customer
-          ? billTo || "Customer selected"
-          : "Pick customer",
-      },
-      {
-        label: "Schedule & terms",
-        complete: readiness.schedule,
-        detail: readiness.schedule
-          ? `${netTerm || 0}-day • ${formatDisplayDate(dueDate)}`
-          : "Set invoice dates",
-      },
-      {
-        label: "Line validation",
-        complete: readiness.lines,
-        detail: `${lineStats.ready}/${lineStats.total || 0} ready`,
-      },
-    ],
-    [
-      readiness,
-      selectedRef,
-      refSearchTerm,
-      billTo,
-      netTerm,
-      dueDate,
-      lineStats.ready,
-      lineStats.total,
-    ],
-  );
-
-  const getSelectedBlMeta = () => {
-    if (selectedBL && blMeta?.[selectedBL]) return blMeta[selectedBL];
-    const keys = Object.keys(blMeta || {});
-    return keys.length ? blMeta[keys[0]] : null;
-  };
+  const canSave = isPrepared && !saveLoading && !saveFeedback?.success &&
+    coerceNumber(selectedCustomerId) > 0 && invoicePostDate && invoiceDate && items.length > 0 &&
+    items.every((line) => String(line.billingCode ?? "").trim() && String(line.description ?? "").trim() &&
+      String(line.rate).trim() !== "" && Number.isFinite(Number(line.rate)) &&
+      Number.isFinite(Number(line.qty)) && Number(line.qty) > 0);
 
   const handleSaveInvoice = async (e) => {
     e?.preventDefault();
+    if (!canSave) return;
+    setSaveLoading(true);
+    setSaveFeedback(null);
 
     try {
       // Convert dates to ISO format for API
@@ -1501,35 +1165,13 @@ function CreateInvoice({
         );
       }, 0);
 
-      const selectedMeta = getSelectedBlMeta();
-      console.log(selectedMeta, "Selected BL meta");
-
-      const resolvedCustomerId =
-        coerceNumber(selectedCustomerId) ??
-        coerceNumber(selectedMeta?.customerId) ??
-        0;
-
-      //table id
-      const resolvedTbId = coerceNumber(selectedMeta?.recordId) ?? 0;
-
-      //table name
-      const resolvedTbName = pickTableName(
-        selectedMeta?.tbName,
-        selectedMeta?.tBName,
-      );
-      console.log(resolvedTbId, resolvedTbName, "Resolved table info");
-
-      if (!resolvedTbId || !resolvedTbName) {
-        throw new Error(
-          "Please search and select a BL before saving the invoice.",
-        );
-      }
+      const resolvedCustomerId = coerceNumber(selectedCustomerId);
 
       // Prepare API payload
       const apiPayload = {
         branch: userBranch || "",
-        tbId: resolvedTbId,
-        tbName: resolvedTbName,
+        tbId: selectedMeta.recordId,
+        tbName: selectedMeta.tbName,
         invoiceNo: (invoiceNumber || "").toString().trim(),
         customerId: resolvedCustomerId,
         postDate: formatDateForAPI(invoicePostDate),
@@ -1541,41 +1183,20 @@ function CreateInvoice({
         oiRates: oiRates,
       };
 
-      console.log("Saving invoice with data:", apiPayload);
-
-      // Call the save API
       const response = await saveInvoice(apiPayload);
-
-      if (response?.success) {
-        alert(`Invoice saved successfully! ${response.message || ""}`);
-        console.log("Invoice save response:", response);
-
-        // Optional: Navigate back or clear form
-        if (typeof onCancel === "function") {
-          onCancel(); // Go back to previous page
-        }
-      } else {
-        throw new Error(response?.message || "Failed to save invoice");
-      }
+      if (!response?.success) throw new Error(response?.message || "Failed to save invoice");
+      setSaveFeedback({ success: true, message: response.message || "Invoice saved." });
+      if (typeof onCancel === "function") onCancel();
     } catch (error) {
-      console.error("Error saving invoice:", error);
-      alert(
-        `Error saving invoice: ${error.message || "Unknown error occurred"}`,
-      );
+      setSaveFeedback({ success: false, message: error?.response?.data?.message || error.message || "Could not save the invoice." });
+    } finally {
+      setSaveLoading(false);
     }
   };
 
-  // default cancel behavior navigates back to invoices list if no onCancel provided
   const internalCancel = () => {
-    try {
-      if (typeof onCancel === "function") return onCancel();
-      // attempt to navigate using history if available
-      window.location.hash = "#/invoices";
-      window.dispatchEvent(new HashChangeEvent("hashchange"));
-    } catch (err) {
-      // final fallback: set location
-      window.location.href = "/#/invoices";
-    }
+    if (typeof onCancel === "function") onCancel();
+    else navigate("/invoices");
   };
 
   return (
@@ -1590,7 +1211,7 @@ function CreateInvoice({
       <section className="panel ref-panel">
         <header className="panel-heading">
           <div>
-            <h3>Reference & BL lookup</h3>
+            <h3>1. Reference &amp; BL Lookup</h3>
           </div>
         </header>
         <form className="ref-grid" onSubmit={doRefSearch} autoComplete="off">
@@ -1605,12 +1226,13 @@ function CreateInvoice({
                 autoCapitalize="off"
                 spellCheck={false}
                 value={refSearchTerm}
+                disabled={refSearching || saveLoading}
                 onChange={(e) => handleRefChange(e.target.value)}
               />
               <button
                 className="btn primary"
                 type="submit"
-                disabled={refSearching}
+                disabled={refSearching || saveLoading}
               >
                 {refSearching ? "Searching…" : "Search"}
               </button>
@@ -1621,10 +1243,11 @@ function CreateInvoice({
             <select
               className="input-control"
               value={selectedBL || ""}
-              onChange={(e) => setSelectedBL(e.target.value)}
+              onChange={(e) => handleBlChange(e.target.value)}
+              disabled={refSearching || saveLoading || !blList.length}
             >
               <option value="">Select BL</option>
-              {acBL.list.map((b) => (
+              {blList.map((b) => (
                 <option key={b} value={b}>
                   {b}
                 </option>
@@ -1632,43 +1255,88 @@ function CreateInvoice({
             </select>
           </label>
         </form>
-        {refLookupError && <div className="inline-error">{refLookupError}</div>}
+        {refLookupError && <div className="inline-error" role="alert">{refLookupError}</div>}
       </section>
+      <section className="panel" aria-labelledby="invoice-prepare-heading">
+        <header className="panel-heading">
+          <div>
+            <h3 id="invoice-prepare-heading">2. Prepare Charges</h3>
+            <p>{hasShipment ? "Choose how to prepare the invoice charges." : "Find the shipment and select a BL to continue."}</p>
+          </div>
+        </header>
+        <div className="billing-prepare-grid">
+          <section className="billing-prepare-card" aria-labelledby="invoice-template-heading">
+            <h4 id="invoice-template-heading">Populate from Template</h4>
+            <p>Use a saved invoice template for the Bill To customer.</p>
+            <label className="field">
+              <span>Invoice template</span>
+              <select className="input-control" value={selectedTemplateId}
+                onChange={(event) => setTemplateChoice({ key: templateKey, id: event.target.value })}
+                disabled={!hasShipment || templateLoading || !templateOptions.length || saveLoading}>
+                <option value="">{templateLoading ? "Loading templates..." : templateOptions.length
+                  ? "Select template" : "No templates available"}</option>
+                {templateOptions.map((template) => (
+                  <option key={template.id} value={template.id}>{template.name || "Template #" + template.id}</option>
+                ))}
+              </select>
+            </label>
+            {hasShipment && !templateKey && <p>Choose Manual Entry to select a Bill To customer first.</p>}
+            <button className="btn outline" type="button" onClick={populateTemplate}
+              disabled={!hasShipment || !selectedTemplate || templateLoading || saveLoading}>
+              {isPrepared ? "Replace Charges with Template" : "Populate Template"}
+            </button>
+            {currentTemplates?.error && <p className="inline-error" role="alert">{currentTemplates.error}</p>}
+          </section>
+          <section className="billing-prepare-card" aria-labelledby="invoice-manual-heading">
+            <h4 id="invoice-manual-heading">Manual Entry</h4>
+            <p>Start with a blank charge line and enter the billing code, rate, and quantity.</p>
+            <button className="btn outline" type="button"
+              onClick={() => prepareCharges("manual", "Manual entry", [emptyLine()])}
+              disabled={!hasShipment || saveLoading || (isPrepared && preparedSource.kind === "manual")}>
+              {isPrepared && preparedSource.kind !== "manual" ? "Replace Charges with Manual Entry" : "Enter Manually"}
+            </button>
+            {hasShipment && lookupCharges?.bl === selectedBL && (
+              <button className="btn outline" type="button" disabled={saveLoading}
+                onClick={() => prepareCharges("shipment", "Shipment charges", lookupCharges.lines.map((line, index) => ({
+                  ...line, id: index + 1,
+                })))}>
+                {isPrepared ? "Replace with Shipment Charges" : "Use Shipment Charges"}
+              </button>
+            )}
+          </section>
+        </div>
+      </section>
+
+      <section className="panel" aria-labelledby="invoice-review-heading">
+        <header className="panel-heading">
+          <div>
+            <h3 id="invoice-review-heading" ref={reviewHeading} tabIndex={-1}>3. Create Invoice</h3>
+            <p>{isPrepared ? "Review the invoice details and charges below before creating it."
+              : "Populate a template or enter charges manually to review the invoice."}</p>
+          </div>
+          {isPrepared && <button className="btn outline" type="button" disabled={saveLoading} onClick={clearCharges}>Clear Charges</button>}
+        </header>
+        {isPrepared ? <p className="billing-charge-source" role="status">
+          {preparedSource.kind === "template" ? "Template: " : ""}{preparedSource.label}
+        </p> : <button className="btn ghost" type="button" onClick={internalCancel}>Cancel</button>}
+      </section>
+
+      {isPrepared && <fieldset className="invoice-review" disabled={saveLoading} aria-label="Invoice review">
       <section className="panel header-panel">
         <header className="panel-heading">
           <div>
-            <h3>Invoice header</h3>
+            <h3>Header</h3>
+            <p>Review the Bill To customer, invoice dates, and terms.</p>
           </div>
+          <button className="btn outline" type="button" onClick={fillHeaderDefaults}>Fill Header Defaults</button>
         </header>
         <div className="header-grid">
-          <div className="field span-2">
-            <label>Template Name</label>
-            <select
-              className="input-control"
-              value={selectedTemplateId}
-              onChange={(e) => handleTemplateChange(e.target.value)}
-              disabled={templateLoading}
-            >
-              <option value="">
-                {templateLoading ? "Loading templates..." : "Select template"}
-              </option>
-              {templateOptions.map((template) => {
-                const label =
-                  template.name || template.Name || `Template #${template.id}`;
-                return (
-                  <option key={template.id ?? label} value={template.id ?? ""}>
-                    {label}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
-
           <div className="field span-2 customer-field">
-            <label>Bill To</label>
+            <label htmlFor="invoice-bill-to">Bill To</label>
             <div className="ac-wrap">
               <input
                 className="input-control"
+                id="invoice-bill-to"
                 placeholder="Customer name"
                 autoComplete="off"
                 autoCorrect="off"
@@ -1826,29 +1494,17 @@ function CreateInvoice({
           </div>
 
           <div className="field with-action">
-            <label>Invoice Number</label>
-            <div className="input-row">
-              <input
-                className="input-control"
-                type="text"
-                inputMode="numeric"
-                autoComplete="new-password"
-                autoCorrect="off"
-                autoCapitalize="off"
-                spellCheck={false}
-                placeholder="Enter invoice #"
-                value={invoiceNumber}
-                onChange={(e) => setInvoiceNumber(e.target.value)}
-              />
-              <button
-                type="button"
-                className="btn ghost"
-                onClick={handleAutoPopulate}
-                title="Auto populate line items from template"
-              >
-                Auto
-              </button>
-            </div>
+            <label htmlFor="invoice-number">Invoice Number</label>
+            <input
+              id="invoice-number"
+              className="input-control"
+              type="text"
+              autoComplete="off"
+              spellCheck={false}
+              placeholder="Enter invoice #"
+              value={invoiceNumber}
+              onChange={(e) => setInvoiceNumber(e.target.value)}
+            />
           </div>
         </div>
       </section>
@@ -1872,7 +1528,7 @@ function CreateInvoice({
             + Add row
           </button>
         </header>
-        <div className="line-table-wrapper">
+        <div className="line-table-wrapper" role="region" aria-label="Invoice charge lines" tabIndex={0}>
           <table className="line-table">
             <thead>
               <tr>
@@ -1885,10 +1541,11 @@ function CreateInvoice({
               </tr>
             </thead>
             <tbody>
-              {items.map((it) => (
+              {items.map((it, index) => (
                 <tr key={it.id}>
                   <td className="billing-cell">
                     <input
+                      aria-label={"Billing code, line " + (index + 1)}
                       value={it.billingCode}
                       onChange={(e) => handleAcChange(it.id, e.target.value)}
                       onFocus={() => {
@@ -1991,6 +1648,7 @@ function CreateInvoice({
                   </td>
                   <td>
                     <input
+                      aria-label={"Description, line " + (index + 1)}
                       value={it.description}
                       onChange={(e) =>
                         updateItem(it.id, "description", e.target.value)
@@ -2004,6 +1662,7 @@ function CreateInvoice({
                   <td>
                     <input
                       type="number"
+                      aria-label={"Rate, line " + (index + 1)}
                       value={it.rate}
                       onChange={(e) =>
                         updateItem(it.id, "rate", e.target.value)
@@ -2017,6 +1676,7 @@ function CreateInvoice({
                   <td>
                     <input
                       type="number"
+                      aria-label={"Quantity, line " + (index + 1)}
                       value={it.qty}
                       onChange={(e) => updateItem(it.id, "qty", e.target.value)}
                       onKeyDown={(e) => {
@@ -2061,7 +1721,6 @@ function CreateInvoice({
           </table>
         </div>
         <div className="line-footer">
-          <div className="line-metrics"></div>
           <div className="subtotal-card">
             <p>Subtotal</p>
             <strong>${subtotal.toFixed(2)}</strong>
@@ -2069,17 +1728,21 @@ function CreateInvoice({
         </div>
         <div className="action-row">
           <button type="button" className="btn ghost" onClick={internalCancel}>
-            Cancel
+            {saveFeedback?.success ? "Back to Invoices" : "Cancel"}
           </button>
           <button
             className="btn primary"
             type="button"
             onClick={handleSaveInvoice}
+            disabled={!canSave}
           >
-            Save invoice
+            {saveLoading ? "Creating..." : "Create Invoice"}
           </button>
         </div>
+        {saveFeedback && <p className={saveFeedback.success ? "inline-success" : "inline-error"}
+          role={saveFeedback.success ? "status" : "alert"}>{saveFeedback.message}</p>}
       </section>
+      </fieldset>}
     </div>
   );
 }

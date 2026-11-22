@@ -45,6 +45,7 @@ try {
 const initialState = {
   token: persistedToken,
   user: persistedUser,
+  billingUserId: '',
   loading: false,
   error: null,
 }
@@ -56,6 +57,7 @@ const authSlice = createSlice({
     logout: (state) => {
       state.token = null
       state.user = null
+      state.billingUserId = ''
       state.error = null
       try { localStorage.removeItem('auth_token') } catch (e) {}
       try { localStorage.removeItem('auth_user') } catch (e) {}
@@ -63,6 +65,7 @@ const authSlice = createSlice({
     setCredentials: (state, action) => {
       state.token = action.payload?.token ?? state.token
       state.user = action.payload?.user ?? state.user
+      if (action.payload?.user) state.billingUserId = ''
       try { localStorage.setItem('auth_user', JSON.stringify(state.user)) } catch (e) {}
     }
   },
@@ -82,6 +85,7 @@ const authSlice = createSlice({
         // Prefer payload.data for the user object, otherwise fallback to payload.user or payload itself
         const userObj = payload?.data ?? payload?.user ?? payload
         state.user = userObj ?? null
+        state.billingUserId = action.meta.arg?.username?.trim() ?? ''
         try { localStorage.setItem('auth_token', state.token) } catch (e) {}
         try { localStorage.setItem('auth_user', JSON.stringify(state.user)) } catch (e) {}
       })
@@ -95,5 +99,10 @@ const authSlice = createSlice({
 export const { logout, setCredentials } = authSlice.actions
 
 export const selectAuth = (state) => ({ token: state.auth.token, user: state.auth.user, loading: state.auth.loading, error: state.auth.error })
+export const selectBillingUserId = ({ auth }) => {
+  const { user, billingUserId } = auth
+  return String(billingUserId || (user?.fUserId ?? user?.FUserId ?? user?.f_UserId ?? user?.F_UserId ??
+    user?.userId ?? user?.userID ?? user?.UserId ?? user?.UserID ?? user?.username ?? user?.userName ?? '')).trim()
+}
 
 export default authSlice.reducer

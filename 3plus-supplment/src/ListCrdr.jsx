@@ -1,7 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
+import { BillingListHeader, BillingPager } from "./components/BillingListControls";
+import BillingUserFilter from "./components/BillingUserFilter";
+import { selectBillingUserId } from "./store/slices/authSlice";
+import { formatBillingDate } from "./billingDates";
 import "./ListCrdr.css";
-import { searchCrdrs } from "./api/crdrs";
+import { searchCrdrs, supportsCrdrUserSearch } from "./api/crdrs";
+import { formatApAmount } from "./api/accountsPayable";
 
 const PAGE_SIZE = 10;
 
@@ -15,133 +21,49 @@ const isoSevenDaysAgo = sevenDaysAgo.toISOString().split("T")[0];
 const initialFilters = {
   crdrNo: "",
   agentName: "",
+  userName: "",
   startDate: isoSevenDaysAgo,
   endDate: isoToday,
 };
 
-const formatCurrency = (value) =>
-  new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(Number(value) || 0);
+export default function ListCrdr() {
+  const userId = useSelector(selectBillingUserId);
+  return <CrdrList key={userId} userId={userId} />;
+}
 
-const formatDate = (value) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return date.toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-};
-
-const parseMaybeJson = (payload) => {
-  if (typeof payload !== "string") return payload;
-  try {
-    return JSON.parse(payload);
-  } catch {
-    return payload;
-  }
-};
-
-const getErrorMessage = (err, fallback) => {
-  const data = parseMaybeJson(err?.response?.data ?? err?.data);
-  if (typeof data === "string" && data.trim()) return data.trim();
-  if (data && typeof data === "object") {
-    const message = data.message || data.error || data.title || data.detail || data.msg;
-    if (typeof message === "string" && message.trim()) return message.trim();
-  }
-  if (typeof err?.message === "string" && err.message.trim()) return err.message;
-  return fallback;
-};
-
-const describeRelativeTime = (date) => {
-  if (!date) return "just now";
-  const delta = Date.now() - date.getTime();
-  const absDelta = Math.abs(delta);
-  const suffix = delta >= 0 ? "ago" : "from now";
-  const seconds = Math.floor(absDelta / 1000);
-  if (seconds < 60) return `${seconds}s ${suffix}`;
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes}m ${suffix}`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ${suffix}`;
-  const days = Math.floor(hours / 24);
-  return `${days}d ${suffix}`;
-};
-
-function ListCrdr() {
+function CrdrList({ userId }) {
   const navigate = useNavigate();
-  const [filters, setFilters] = useState(() => ({ ...initialFilters }));
-  const [lastUsedFilters, setLastUsedFilters] = useState(() => ({ ...initialFilters }));
-  const [rows, setRows] = useState([]);
-  const [page, setPage] = useState(1);
-  const [meta, setMeta] = useState({ message: "", success: true });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
-  const [lastRefresh, setLastRefresh] = useState(null);
-
-  const fetchCrdrs = useCallback(async (activeFilters) => {
-    if (!activeFilters) return;
-    setLoading(true);
-    setError(null);
-
-    try {
-      const payload = await searchCrdrs(activeFilters);
-      const list = Array.isArray(payload?.data)
-        ? payload.data
-        : Array.isArray(payload)
-          ? payload
-          : [];
-
-      setRows(list);
-      setPage(1);
-      setMeta({
-        message: payload?.message ?? "",
-        success: Boolean(payload?.success ?? true),
-      });
-      setLastRefresh(new Date());
-      setLastUsedFilters({ ...activeFilters });
-    } catch (err) {
-      setRows([]);
-      setMeta({ message: "", success: false });
-      setError(getErrorMessage(err, "Unable to fetch CRDRs"));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+  const [filters, setFilters] = useState(() => ({ ...initialFilters, userName: userId }));
+  const [request, setRequest] = useState(() => ({ filters, page: 1 }));
+  const [response, setResponse] = useState(null);
+  const { page } = request;
+  const active = response?.request === request ? response : null;
+  const loading = !active;
+  const error = active?.error;
+  const rows = active?.data?.items ?? [];
+  const total = active?.data?.totalCount ?? 0;
+  const totalPages = active?.data?.totalPages ?? 0;
+  const offset = (page - 1) * PAGE_SIZE;
 
   useEffect(() => {
-    fetchCrdrs({ ...initialFilters });
-  }, [fetchCrdrs]);
-
-  const insight = useMemo(() => {
-    if (!rows.length) {
-      return {
-        total: 0,
-        totalAmount: 0,
-        averageAmount: 0,
-        agentCount: 0,
-      };
-    }
-
-    const agentSet = new Set();
-    let totalAmount = 0;
-
-    rows.forEach((item) => {
-      totalAmount += Number(item.fTotal) || 0;
-      if (item?.fsName) agentSet.add(String(item.fsName).toUpperCase());
-    });
-
-    return {
-      total: rows.length,
-      totalAmount,
-      averageAmount: rows.length ? totalAmount / rows.length : 0,
-      agentCount: agentSet.size,
-    };
-  }, [rows]);
+    const controller = new AbortController();
+    searchCrdrs(request.filters, page, PAGE_SIZE, controller.signal)
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        if (page > 1 && page > data.totalPages) {
+          setRequest({ ...request, page: Math.max(1, data.totalPages) });
+          return;
+        }
+        setResponse({ request, data });
+      })
+      .catch((err) => {
+        if (!controller.signal.aborted) {
+          const message = err.response?.data?.title || err.response?.data?.message;
+          setResponse({ request, error: message || "Could not load credit/debit notes. Try again." });
+        }
+      });
+    return () => controller.abort();
+  }, [request, page]);
 
   const handleInputChange = (event) => {
     const { name, value } = event.target;
@@ -149,66 +71,24 @@ function ListCrdr() {
   };
 
   const handleSearch = (event) => {
-    event?.preventDefault();
-    setPage(1);
-    fetchCrdrs(filters);
+    event.preventDefault();
+    setRequest({ filters, page: 1 });
   };
 
   const handleEditCrdr = (row) => {
-    const crdrId = row?.fId;
+    const crdrId = row.id;
     if (!crdrId && crdrId !== 0) return;
     navigate(`/crdr/edit/${crdrId}`);
   };
 
-  const handleRemoveCrdr = (row) => {
-    const id = row?.fId ?? row?.fCrDbNo;
-    if (!id) return;
-    const ok = window.confirm(`Remove ${row?.fCrDbNo || id} from the list?`);
-    if (!ok) return;
-    setRows((prev) => prev.filter((item) => (item?.fId ?? item?.fCrDbNo) !== id));
-  };
-
-  const totalPages = useMemo(() => {
-    const total = rows.length;
-    return Math.max(1, Math.ceil(total / PAGE_SIZE));
-  }, [rows.length]);
-
-  useEffect(() => {
-    setPage((prev) => Math.min(Math.max(prev, 1), totalPages));
-  }, [totalPages]);
-
-  const pageRange = useMemo(() => {
-    const total = rows.length;
-    if (!total) return { start: 0, end: 0, total };
-    const start = (page - 1) * PAGE_SIZE + 1;
-    const end = Math.min(page * PAGE_SIZE, total);
-    return { start, end, total };
-  }, [rows.length, page]);
-
-  const pagedRows = useMemo(() => {
-    const startIndex = (page - 1) * PAGE_SIZE;
-    return rows.slice(startIndex, startIndex + PAGE_SIZE);
-  }, [rows, page]);
-
   return (
-    <div className="crdr-list-page">
+    <div className="crdr-list-page billing-list-page">
+      <BillingListHeader title="Credit / Debit Notes" description="Search credit and debit records."
+        createPath="/crdr/create" createLabel="Create Note" />
 
-      <section className="panel invoice-hero">
-        <div className="hero-copy">
-          <p className="eyebrow" style={{ textTransform: 'uppercase', letterSpacing: '0.1em', fontSize: '0.78rem', color: '#64748b', margin: 0 }}>CRDR</p>
-          <h3>CRDR List</h3>
-          <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>Search and manage credit / debit records.</p>
-        </div>
-      </section>
-
-      <section className="panel filters-panel">
-        <header className="panel-header">
-          <div>
-            <h3>Search filters</h3>
-          </div>
-        </header>
-
-        <form className="filter-grid" onSubmit={handleSearch} autoComplete="off">
+      <section className="panel filters-panel" aria-label="Search filters">
+        <form className="filter-grid" data-creator-filter={supportsCrdrUserSearch || undefined}
+          onSubmit={handleSearch} autoComplete="off">
           <label className="field">
             <span>CRDR number</span>
             <input
@@ -234,8 +114,12 @@ function ListCrdr() {
               onChange={handleInputChange}
             />
           </label>
+          {supportsCrdrUserSearch && (
+            <BillingUserFilter value={filters.userName}
+              onChange={(userName) => setFilters((previous) => ({ ...previous, userName }))} />
+          )}
           <label className="field">
-            <span>Start date</span>
+            <span>Post date from</span>
             <input
               name="startDate"
               type="date"
@@ -244,120 +128,67 @@ function ListCrdr() {
             />
           </label>
           <label className="field">
-            <span>End date</span>
+            <span>Post date to</span>
             <input
               name="endDate"
               type="date"
+              min={filters.startDate || undefined}
               value={filters.endDate}
               onChange={handleInputChange}
             />
           </label>
 
-          <div className="form-actions" style={{ display: "flex", gap: "0.5rem", alignItems: "center" }}>
-            <button type="submit" className="btn primary" disabled={loading}>
-              {loading ? "Searching…" : "Search"}
-            </button>
-            <button
-              type="button"
-              className="btn primary"
-              onClick={() => navigate("/crdr/create")}
-            >
-              Create
-            </button>
-          </div>
+          <button type="submit" className="btn outline" disabled={loading}>{loading ? "Searching..." : "Search"}</button>
         </form>
       </section>
 
       <section className="panel table-panel">
-        <header className="table-header">
+        <header className="table-header billing-results-heading">
           <div>
-            <h3>CRDR results</h3>
-            <p>
-              {rows.length} record(s)
-              {rows.length > 0 ? ` • showing ${pageRange.start}-${pageRange.end} of ${pageRange.total}` : ""}
-            </p>
+            <h2>Results</h2>
+            <p aria-live="polite">{loading ? "Loading notes..." : rows.length
+              ? "Showing " + (offset + 1) + "-" + (offset + rows.length) + " of " + total
+              : "0 results"}</p>
           </div>
-          <div className="search-actions" aria-label="CRDR actions" style={{ display: "flex", flexDirection: "column", gap: "0.5rem", alignItems: "flex-end" }}>
-
-            {rows.length > 0 && (
-              <div className="search-actions" aria-label="CRDR pages">
-                <button
-                  type="button"
-                  className="btn outline pagination-btn"
-                  onClick={() => setPage(1)}
-                  disabled={page <= 1}
-                >
-                  First
-                </button>
-                <button
-                  type="button"
-                  className="btn outline pagination-btn"
-                  onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  disabled={page <= 1}
-                >
-                  Prev
-                </button>
-                <span className="pagination-page" aria-live="polite">
-                  Page {page} / {totalPages}
-                </span>
-                <button
-                  type="button"
-                  className="btn outline pagination-btn"
-                  onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-                  disabled={page >= totalPages}
-                >
-                  Next
-                </button>
-                <button
-                  type="button"
-                  className="btn outline pagination-btn"
-                  onClick={() => setPage(totalPages)}
-                  disabled={page >= totalPages}
-                >
-                  Last
-                </button>
-              </div>
-            )}
-          </div>
+          {!loading && <BillingPager page={page} totalPages={totalPages} onPageChange={(nextPage) => setRequest({ ...request, page: nextPage })} />}
         </header>
 
         <div className={`table-wrapper ${loading ? "is-loading" : ""}`}>
-          {error && <div className="error-row">{error}</div>}
+          {error && <div className="error-row" role="alert">{error}</div>}
 
           {!loading && !error && rows.length === 0 && (
             <div className="empty-row">No results yet. Adjust the filters and search.</div>
           )}
 
           {!loading && !error && rows.length > 0 && (
-            <table className="templates-table">
-              <thead>
-                <tr>
-                  <th>CRDR No</th>
-                  <th>Agent</th>
-                  <th style={{ textAlign: "center" }}>Post Date</th>
-                  <th style={{ textAlign: "center" }}>Invoice Date</th>
-                  <th style={{ textAlign: "center" }}>Due Date</th>
-                  <th style={{ textAlign: "right" }}>Total</th>
-                  <th />
+            <table className="templates-table billing-records" role="table">
+              <thead role="rowgroup">
+                <tr role="row">
+                  <th scope="col">CRDR No</th>
+                  <th scope="col">Agent</th>
+                  <th scope="col">Post Date</th>
+                  <th scope="col">Invoice Date</th>
+                  <th scope="col">Due Date</th>
+                  <th scope="col" className="billing-numeric">Total</th>
+                  <th scope="col" className="billing-numeric">Actions</th>
                 </tr>
               </thead>
-              <tbody>
-                {pagedRows.map((row) => (
-                  <tr key={row.fId ?? row.fCrDbNo}>
-                    <td>{row.fCrDbNo || "—"}</td>
-                    <td>{row.fsName || "—"}</td>
-                    <td style={{ textAlign: "center" }}>{formatDate(row.fPostDate)}</td>
-                    <td style={{ textAlign: "center" }}>{formatDate(row.fInvoiceDate)}</td>
-                    <td style={{ textAlign: "center" }}>{formatDate(row.fDueDate)}</td>
-                    <td style={{ textAlign: "right", color: Number(row.fTotal) < 0 ? "#dc2626" : undefined }}>
-                      {formatCurrency(row.fTotal)}
+              <tbody role="rowgroup">
+                {rows.map((row) => (
+                  <tr role="row" key={row.id}>
+                    <td role="cell" data-label="CRDR No.">
+                      {row.memoNumber || "-"}
+                      {row.createdBy?.trim() && <small className="billing-created-by">By {row.createdBy.trim()}</small>}
                     </td>
-                    <td style={{ textAlign: "right" }}>
-                      <div style={{ display: "flex", gap: "0.5rem", justifyContent: "flex-end" }}>
-                        <button type="button" className="btn outline" onClick={() => handleEditCrdr(row)}>
-                          Edit
-                        </button>
-                      </div>
+                    <td role="cell" data-label="Agent">{row.agentCompanyName || "—"}</td>
+                    <td role="cell" data-label="Post date">{formatBillingDate(row.postDate)}</td>
+                    <td role="cell" data-label="Invoice date">{formatBillingDate(row.invoiceDate)}</td>
+                    <td role="cell" data-label="Due date">{formatBillingDate(row.dueDate)}</td>
+                    <td role="cell" data-label="Total" className={Number(row.total) < 0 ? "billing-numeric billing-negative" : "billing-numeric"}>
+                      {formatApAmount(row.total, row.currency)}
+                    </td>
+                    <td role="cell" className="billing-numeric">
+                      <button type="button" className="btn outline" onClick={() => handleEditCrdr(row)}>Edit</button>
                     </td>
                   </tr>
                 ))}
@@ -369,5 +200,3 @@ function ListCrdr() {
     </div>
   );
 }
-
-export default ListCrdr;

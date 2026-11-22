@@ -2,6 +2,7 @@ export const portalSections = [
   { label: 'Workspace', links: [{ label: 'Overview', to: '/', icon: 'overview' }] },
   { label: 'Billing', links: [
     { label: 'Invoices', to: '/invoices', icon: 'invoice' },
+    { label: 'AP Invoices', to: '/ap-invoices', icon: 'invoice' },
     { label: 'Credit / Debit Notes', to: '/crdr', icon: 'notes' },
   ] },
   { label: 'Templates', links: [
@@ -17,6 +18,7 @@ const icons = {
   template: 'M8 3h12v14H8z M4 7v14h12 M11 7h6 M11 11h6',
   menu: 'M4 6h16 M4 12h16 M4 18h16',
   close: 'M5 5l14 14 M19 5 5 19',
+  upload: 'M12 16V4 M7 9l5-5 5 5 M5 15v5h14v-5',
 }
 
 export function PortalIcon({ name }) {

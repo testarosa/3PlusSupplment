@@ -1,0 +1,147 @@
+.ap-invoice-page .ap-page-heading h1 {
+  margin: 0;
+  font: 700 clamp(1.65rem, 3vw, 2rem)/1.15 var(--portal-display);
+}
+
+.ap-invoice-page .panel-heading h2 {
+  margin: 0;
+}
+
+.ap-invoice-page .ap-step-note {
+  margin: .25rem 0;
+  color: var(--portal-muted);
+}
+
+.ap-invoice-page .ap-step-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+
+.ap-invoice-page .ap-draft-actions p {
+  margin: 0;
+  color: var(--portal-muted);
+}
+
+.ap-invoice-page .ap-lookup,
+.ap-invoice-page .ap-invoice-form {
+  display: grid;
+  gap: 1rem;
+}
+
+.ap-invoice-page .ap-lookup {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
+  align-items: end;
+}
+
+.ap-invoice-page .ap-lookup .ref-input-row input {
+  min-width: 0;
+}
+
+.ap-invoice-page .ap-lookup .btn {
+  flex-shrink: 0;
+}
+
+.ap-invoice-page .ap-invoice-form fieldset {
+  min-width: 0;
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+
+.ap-invoice-page .ap-review-form > .panel {
+  display: grid;
+  gap: 1rem;
+}
+
+.ap-invoice-page .ap-review-form .action-row {
+  margin-top: 0;
+}
+
+.ap-invoice-page .ap-review-note {
+  margin: 0;
+  color: var(--portal-muted);
+  font-size: .875rem;
+  text-align: right;
+}
+
+.ap-invoice-page .ap-received {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+}
+
+.ap-vendor-anchor {
+  position: relative;
+  min-width: 0;
+}
+
+.ap-vendor-anchor input {
+  width: 100%;
+}
+
+.billing-user-popup.ap-code-popup {
+  position: fixed;
+  inset: auto;
+  z-index: 100;
+  max-width: none;
+  overflow: auto;
+  color: var(--portal-ink);
+  font: .875rem var(--portal-font);
+}
+
+.ap-code-popup ul {
+  max-height: none;
+  overflow: visible;
+}
+
+.ap-invoice-page .line-table {
+  min-width: 680px;
+}
+
+.ap-invoice-page .ap-draft-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+}
+
+.ap-invoice-page .ap-draft-actions [role] {
+  flex-basis: 100%;
+}
+
+.ap-invoice-page .ap-source-card,
+.ap-invoice-page .ap-import-controls {
+  display: grid;
+  align-content: start;
+  justify-items: start;
+  gap: .75rem;
+}
+
+.ap-invoice-page .ap-source-card {
+  min-width: 0;
+  padding: 1rem;
+  border: 1px solid var(--portal-line);
+  border-radius: 8px;
+  background: var(--portal-paper);
+}
+
+.ap-invoice-page .ap-source-card h3 {
+  margin: 0;
+  font: 700 1.4rem/1.1 var(--portal-display);
+}
+
+.ap-invoice-page .ap-source-card > p {
+  margin: 0;
+  color: var(--portal-muted);
+}
+
+.ap-invoice-page .ap-import {
+  border-inline-start: 4px solid var(--portal-orange);
+}
+
+.ap-invoice-page .ap-import-controls {
+  min-width: 0;
+  width: 100%;
+}

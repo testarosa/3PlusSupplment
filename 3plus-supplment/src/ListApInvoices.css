@@ -1,0 +1,23 @@
+.ap-list-page .ap-list-switch {
+  justify-content: flex-start;
+  margin: 0;
+}
+
+.portal .workspace-content .ap-list-switch .btn[aria-pressed="true"] {
+  background: var(--portal-ink);
+  color: var(--portal-paper);
+}
+
+.ap-list-page .templates-table .ap-result-total {
+  text-align: right;
+  white-space: nowrap;
+}
+
+.ap-list-page .ap-negative {
+  color: #b42318;
+}
+
+.ap-list-page .ap-list-status {
+  margin: 0;
+  color: var(--portal-ink);
+}

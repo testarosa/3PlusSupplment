@@ -1,9 +1,13 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useSelector } from 'react-redux'
 import { useNavigate } from 'react-router-dom'
+import { BillingListHeader, BillingPager } from './components/BillingListControls'
+import BillingUserFilter from './components/BillingUserFilter'
+import { formatBillingDate } from './billingDates'
 import './ListInvoice.css'
-import { deleteInvoice, searchInvoices } from './api/invoices'
-import { selectAuth } from './store/slices/authSlice'
+import { deleteInvoice, searchInvoices, supportsInvoiceUserSearch } from './api/invoices'
+import { formatApAmount } from './api/accountsPayable'
+import { selectBillingUserId } from './store/slices/authSlice'
 
 const PAGE_SIZE = 10
 
@@ -21,146 +25,46 @@ const initialFilters = {
 	invoiceTo: isoToday, // default to today   
 }
 
-const formatCurrency = (value) => new Intl.NumberFormat('en-US', {
-	style: 'currency',
-	currency: 'USD',
-	maximumFractionDigits: 2,
-}).format(Number(value) || 0)
-
-const formatDate = (value) => {
-	if (!value) return '—'
-	const date = new Date(value)
-	if (Number.isNaN(date.getTime())) return value
-	return date.toLocaleDateString('en-US', {
-		month: 'short',
-		day: 'numeric',
-		year: 'numeric',
-	})
+export default function ListInvoice() {
+	const userId = useSelector(selectBillingUserId)
+	return <InvoiceList key={userId} userId={userId} />
 }
 
-const describeRelativeTime = (date) => {
-	if (!date) return 'just now'
-	const delta = Date.now() - date.getTime()
-	const absDelta = Math.abs(delta)
-	const suffix = delta >= 0 ? 'ago' : 'from now'
-	const seconds = Math.floor(absDelta / 1000)
-	if (seconds < 60) return `${seconds}s ${suffix}`
-	const minutes = Math.floor(seconds / 60)
-	if (minutes < 60) return `${minutes}m ${suffix}`
-	const hours = Math.floor(minutes / 60)
-	if (hours < 24) return `${hours}h ${suffix}`
-	const days = Math.floor(hours / 24)
-	return `${days}d ${suffix}`
-}
-
-const readableFilterLabel = {
-	userName: 'User',
-	invoiceNo: 'Invoice',
-	customerName: 'Customer',
-	invoiceFrom: 'From',
-	invoiceTo: 'To',
-}
-
-function ListInvoice() {
+function InvoiceList({ userId }) {
 	const navigate = useNavigate()
-	const { user: currentUser } = useSelector(selectAuth)
-	const loginUserName =
-		currentUser?.userId ??
-		currentUser?.userName ??
-		currentUser?.username ??
-		currentUser?.name ??
-		'pom'
-	const [filters, setFilters] = useState(() => ({ ...initialFilters }))
-	const [lastUsedFilters, setLastUsedFilters] = useState(() => ({ ...initialFilters }))
-	const [invoices, setInvoices] = useState([])
-	const [page, setPage] = useState(1)
-	const [meta, setMeta] = useState({ message: '', success: true })
-	const [loading, setLoading] = useState(false)
-	const [error, setError] = useState(null)
-	const [lastRefresh, setLastRefresh] = useState(null)
-
-	const fetchInvoices = useCallback(async (activeFilters) => {
-		if (!activeFilters) return
-		const normalizedFilters = {
-			...activeFilters,
-			userName: String(activeFilters.userName || loginUserName || '').trim(),
-		}
-		setLoading(true)
-		setError(null)
-
-		try {
-			const payload = await searchInvoices(normalizedFilters)
-			const rows = Array.isArray(payload?.data)
-				? payload.data
-				: Array.isArray(payload)
-					? payload
-					: []
-
-			setInvoices(rows)
-			setPage(1)
-			setMeta({
-				message: payload?.message ?? '',
-				success: Boolean(payload?.success ?? true),
-			})
-			setLastRefresh(new Date())
-			setLastUsedFilters({ ...normalizedFilters })
-		} catch (err) {
-			setInvoices([])
-			setMeta({ message: '', success: false })
-			setError(err?.message ?? 'Unable to fetch invoices')
-		} finally {
-			setLoading(false)
-		}
-	}, [loginUserName])
+	const [filters, setFilters] = useState(() => ({ ...initialFilters, userName: userId }))
+	const [request, setRequest] = useState(() => ({ filters, page: 1 }))
+	const [response, setResponse] = useState(null)
+	const [deleteError, setDeleteError] = useState('')
+	const [deletingId, setDeletingId] = useState(null)
+	const { page } = request
+	const active = response?.request === request ? response : null
+	const loading = !active
+	const error = active?.error || deleteError
+	const invoices = active?.data?.items ?? []
+	const total = active?.data?.totalCount ?? 0
+	const totalPages = active?.data?.totalPages ?? 0
+	const offset = (page - 1) * PAGE_SIZE
 
 	useEffect(() => {
-		fetchInvoices({ ...initialFilters, userName: loginUserName })
-	}, [fetchInvoices])
-
-	const insight = useMemo(() => {
-		if (!invoices.length) {
-			return {
-				total: 0,
-				customerCount: 0,
-				totalAmount: 0,
-				averageAmount: 0,
-				topInvoice: null,
-				nextDueDate: null,
-			}
-		}
-
-		const customerIds = new Set()
-		let totalAmount = 0
-		let topInvoice = null
-
-		invoices.forEach((item) => {
-			const amount = Number(item.invoiceAmount) || 0
-			totalAmount += amount
-			const candidateId = item.customerId ?? item.companyId ?? item.companyName
-			if (candidateId) customerIds.add(candidateId)
-			const topAmount = Number(topInvoice?.invoiceAmount) || 0
-			if (!topInvoice || amount > topAmount) {
-				topInvoice = item
-			}
-		})
-
-		const dueTimeline = invoices
-			.map((row) => {
-				const dueEpoch = new Date(row.dueDate).getTime()
-				return { row, dueEpoch }
+		const controller = new AbortController()
+		searchInvoices(request.filters, page, PAGE_SIZE, controller.signal)
+			.then((data) => {
+				if (controller.signal.aborted) return
+				if (page > 1 && page > data.totalPages) {
+					setRequest({ ...request, page: Math.max(1, data.totalPages) })
+					return
+				}
+				setResponse({ request, data })
 			})
-			.filter(({ dueEpoch }) => !Number.isNaN(dueEpoch))
-			.sort((a, b) => a.dueEpoch - b.dueEpoch)
-
-		return {
-			total: invoices.length,
-			customerCount: customerIds.size,
-			totalAmount,
-			averageAmount: invoices.length ? totalAmount / invoices.length : 0,
-			topInvoice,
-			nextDueDate: dueTimeline.length ? dueTimeline[0].row : null,
-		}
-	}, [invoices])
+			.catch((err) => {
+				if (!controller.signal.aborted) {
+					const message = err.response?.data?.title || err.response?.data?.message
+					setResponse({ request, error: message || 'Could not load invoices. Try again.' })
+				}
+			})
+		return () => controller.abort()
+	}, [request, page])
 
 	const handleInputChange = (event) => {
 		const { name, value } = event.target
@@ -168,19 +72,9 @@ function ListInvoice() {
 	}
 
 	const handleSearch = (event) => {
-		event?.preventDefault()
-		setPage(1)
-		fetchInvoices({ ...filters, userName: loginUserName })
-	}
-
-	const handleCreateInvoice = () => {
-		try {
-			navigate('/invoices/create')
-		} catch (err) {
-			const hash = '#/invoices/create'
-			if (window.location.hash !== hash) window.location.hash = hash
-			else window.dispatchEvent(new HashChangeEvent('hashchange'))
-		}
+		event.preventDefault()
+		setDeleteError('')
+		setRequest({ filters, page: 1 })
 	}
 
 	const handleEditInvoice = (invoice) => {
@@ -191,63 +85,34 @@ function ListInvoice() {
 
 	const handleDeleteInvoice = async (invoice) => {
 		const id = invoice?.invoiceId ?? invoice?.id ?? null
-		if (!id) return
+		if (!id || deletingId !== null) return
 		const ok = window.confirm(`Delete invoice ${invoice?.invoiceNo || id}?`)
 		if (!ok) return
-		setError(null)
+		setDeleteError('')
+		setDeletingId(id)
 		try {
 			const resp = await deleteInvoice(id)
 			// Best-effort: if backend returns a success flag, respect it.
 			if (resp && typeof resp === 'object' && 'success' in resp && !resp.success) {
 				throw new Error(resp?.message || 'Failed to delete invoice')
 			}
-			setInvoices((prev) => prev.filter((row) => (row?.invoiceId ?? row?.id) !== id))
+			setRequest((previous) => ({ ...previous }))
 		} catch (err) {
-			setError(err?.message || 'Failed to delete invoice')
+			setDeleteError(err?.message || 'Failed to delete invoice')
+		} finally {
+			setDeletingId(null)
 		}
 	}
 
-	const activeFilterPills = Object.entries(lastUsedFilters).filter(([, value]) => value)
-
-	const totalPages = useMemo(() => {
-		const total = invoices.length
-		return Math.max(1, Math.ceil(total / PAGE_SIZE))
-	}, [invoices.length])
-
-	useEffect(() => {
-		setPage((prev) => Math.min(Math.max(prev, 1), totalPages))
-	}, [totalPages])
-
-	const pageRange = useMemo(() => {
-		const total = invoices.length
-		if (!total) return { start: 0, end: 0, total }
-		const start = (page - 1) * PAGE_SIZE + 1
-		const end = Math.min(page * PAGE_SIZE, total)
-		return { start, end, total }
-	}, [invoices.length, page])
-
-	const pagedInvoices = useMemo(() => {
-		const startIndex = (page - 1) * PAGE_SIZE
-		return invoices.slice(startIndex, startIndex + PAGE_SIZE)
-	}, [invoices, page])
-
 	return (
-		<div className="invoice-list-page">
-			<section className="panel invoice-hero" >
-				<div className="hero-copy" >
-					<p className="eyebrow"></p>
-					<h3>Search Invoice</h3>
-				</div>
-			</section>
+		<div className="invoice-list-page billing-list-page">
+			<BillingListHeader title="Invoices" description="Search customer invoices."
+				createPath="/invoices/create" createLabel="Create Invoice">
+				<button className="btn outline" type="button" disabled={loading} onClick={() => { setDeleteError(''); setRequest({ ...request }) }}>Refresh</button>
+			</BillingListHeader>
 
-			<section className="panel filters-panel">
-				<header className="panel-header">
-					<div>
-						<h3>Search filters</h3>
-					</div>
-				</header>
-
-				<form className="filter-grid" onSubmit={handleSearch} autoComplete="off">
+			<section className="panel filters-panel" aria-label="Search filters">
+				<form className="filter-grid" data-creator-filter={supportsInvoiceUserSearch || undefined} onSubmit={handleSearch} autoComplete="off">
 					<label className="field">
 						<span>Invoice number</span>
 						<input
@@ -272,6 +137,10 @@ function ListInvoice() {
 							onChange={handleInputChange}
 						/>
 					</label>
+					{supportsInvoiceUserSearch && (
+						<BillingUserFilter value={filters.userName}
+							onChange={(userName) => setFilters((previous) => ({ ...previous, userName }))} />
+					)}
 					<label className="field">
 						<span>Invoice from</span>
 						<input
@@ -286,28 +155,16 @@ function ListInvoice() {
 						<input
 							name="invoiceTo"
 							type="date"
+							min={filters.invoiceFrom || undefined}
 							value={filters.invoiceTo}
 							onChange={handleInputChange}
 						/>
 					</label>
-					<div className="form-actions">
-						<button type="submit" className="btn primary" disabled={loading}>
-							{loading ? 'Searching…' : 'Run search'}
-						</button>
-					</div>
+					<button type="submit" className="btn outline" disabled={loading}>
+						{loading ? 'Searching...' : 'Search'}
+					</button>
 				</form>
 
-				<div className="active-filters" aria-live="polite">
-					{activeFilterPills.length ? (
-						activeFilterPills.map(([key, value]) => (
-							<span key={key} className="filter-pill">
-								{readableFilterLabel[key] || key}: <strong>{value}</strong>
-							</span>
-						))
-					) : (
-						<span className="filter-pill muted">No filters applied</span>
-					)}
-				</div>
 			</section>
 
 			{error && (
@@ -317,38 +174,15 @@ function ListInvoice() {
 				</div>
 			)}
 
-			<section className="insight-grid">
-				<article className="insight-card highlight">
-					<p>Invoices found</p>
-					<h4>{insight.total}</h4>
-				</article>
-				<article className="insight-card">
-					<p>Total exposure</p>
-					<h4>{formatCurrency(insight.totalAmount)}</h4>
-				</article>
-			</section>
-
 			<section className="panel table-panel">
-				<header className="panel-header">
+				<header className="panel-header billing-results-heading">
 					<div>
-						<h3>Invoice results</h3>
-						<p>
-							Showing {pageRange.start}-{pageRange.end} of {pageRange.total}.
-						</p>
+						<h2>Results</h2>
+						<p aria-live="polite">{loading ? 'Loading invoices...' : total
+							? 'Showing ' + (offset + 1) + '-' + (offset + invoices.length) + ' of ' + total
+							: '0 results'}</p>
 					</div>
-					<div className="header-actions">
-						<button type="button" className="btn outline" onClick={handleCreateInvoice}>
-							Create Invoice
-						</button>
-						<button
-							type="button"
-							className="btn outline"
-							onClick={() => fetchInvoices(lastUsedFilters)}
-							disabled={loading}
-						>
-							{loading ? 'Refreshing…' : 'Refresh data'}
-						</button>
-					</div>
+					{!loading && <BillingPager page={page} totalPages={totalPages} onPageChange={(nextPage) => setRequest({ ...request, page: nextPage })} />}
 				</header>
 
 				<div className={`table-wrapper ${loading ? 'is-loading' : ''}`}>
@@ -358,82 +192,39 @@ function ListInvoice() {
 							<p>Loading invoices…</p>
 						</div>
 					) : invoices.length ? (
-						<>
-							<div className="pagination-bar" role="navigation" aria-label="Invoice pages">
-								<div className="pagination-meta">
-									Rows per page: {PAGE_SIZE} • {pageRange.start}-{pageRange.end} of {pageRange.total}
-								</div>
-								<div className="pagination-controls">
-									<button
-										type="button"
-										className="btn outline pagination-btn"
-										onClick={() => setPage(1)}
-										disabled={page <= 1}
-									>
-										First
-									</button>
-									<button
-										type="button"
-										className="btn outline pagination-btn"
-										onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-										disabled={page <= 1}
-									>
-										Prev
-									</button>
-									<span className="pagination-page" aria-live="polite">
-										Page {page} of {totalPages}
-									</span>
-									<button
-										type="button"
-										className="btn outline pagination-btn"
-										onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
-										disabled={page >= totalPages}
-									>
-										Next
-									</button>
-									<button
-										type="button"
-										className="btn outline pagination-btn"
-										onClick={() => setPage(totalPages)}
-										disabled={page >= totalPages}
-									>
-										Last
-									</button>
-								</div>
-							</div>
-						<table>
-							<thead>
-								<tr>
-									<th>Invoice</th>
-									<th>Customer</th>
-									<th>Invoice &amp; Post</th>
-									<th>Due date</th>
-									<th className="amount-col">Amount</th>
-									<th className="actions-col">Actions</th>
+						<table className="billing-records" role="table">
+							<thead role="rowgroup">
+								<tr role="row">
+									<th scope="col">Invoice</th>
+									<th scope="col">Customer</th>
+									<th scope="col">Invoice &amp; Post</th>
+									<th scope="col">Due date</th>
+									<th scope="col" className="amount-col">Amount</th>
+									<th scope="col" className="actions-col">Actions</th>
 								</tr>
 							</thead>
-							<tbody>
-								{pagedInvoices.map((invoice) => (
-									<tr key={invoice.invoiceId ?? invoice.invoiceNo}>
-										<td>
+							<tbody role="rowgroup">
+								{invoices.map((invoice) => (
+									<tr role="row" key={invoice.invoiceId ?? invoice.invoiceNo}>
+										<td role="cell" data-label="Invoice">
 											<div className="cell-title">{invoice.invoiceNo || '—'}</div>
-											<small>ID {invoice.invoiceId ?? 'pending'}</small>
+											<small className="billing-created-by">{invoice.createdBy?.trim() ? 'By ' + invoice.createdBy.trim() : 'ID ' + (invoice.invoiceId ?? 'pending')}</small>
 										</td>
-										<td>
+										<td role="cell" data-label="Customer">
 											<div className="cell-title">{invoice.companyName || 'Unknown company'}</div>
 											<small>#{invoice.companyId ?? '—'}</small>
 										</td>
-										<td>
+										<td role="cell" data-label="Invoice &amp; post dates">
 											<div className="date-stack">
-												<span>{formatDate(invoice.invoiceDate)}</span>
-												<small>Post {formatDate(invoice.postDate)}</small>
+												<span>{formatBillingDate(invoice.invoiceDate)}</span>
+												<small>Post {formatBillingDate(invoice.postDate)}</small>
 											</div>
 										</td>
-										<td>
-											<span className="due-chip">{formatDate(invoice.dueDate)}</span>
+										<td role="cell" data-label="Due date">
+											<span className="due-chip">{formatBillingDate(invoice.dueDate)}</span>
 										</td>
-										<td className="amount-col">{formatCurrency(invoice.invoiceAmount)}</td>
-										<td className="actions-col">
+										<td role="cell" data-label="Total" className="amount-col">{formatApAmount(invoice.invoiceAmount, invoice.currency || 'USD')}</td>
+										<td role="cell" className="actions-col">
 											<div className="invoice-actions">
 												<button
 													type="button"
@@ -447,7 +238,7 @@ function ListInvoice() {
 													type="button"
 													className="btn danger action-btn"
 													onClick={() => handleDeleteInvoice(invoice)}
-													disabled={loading || (!invoice?.invoiceId && !invoice?.id)}
+													disabled={loading || deletingId !== null || (!invoice?.invoiceId && !invoice?.id)}
 												>
 													Delete
 												</button>
@@ -457,9 +248,8 @@ function ListInvoice() {
 								))}
 							</tbody>
 						</table>
-						</>
 					) : (
-						<div className="empty-state">
+						!active?.error && <div className="empty-state">
 							<h4>No invoices match your filters</h4>
 							<p>Try widening the date range or clearing the invoice number.</p>
 						</div>
@@ -469,5 +259,3 @@ function ListInvoice() {
 		</div>
 	)
 }
-
-export default ListInvoice
